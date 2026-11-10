@@ -2,6 +2,7 @@
 
 pub mod adapters;
 pub mod claude;
+pub mod codex;
 pub mod discover;
 pub mod git;
 pub mod hub;

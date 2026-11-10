@@ -12,7 +12,7 @@ Status:
 - **Phase 1 done.** `nyx-agentd` owns sessions in holder processes that
   outlive the app and the manager; `nyx-agents` is its command line. Claude
   Code launches, runs and reattaches through it; the other nine harnesses
-  are discovered and launch as plain terminal sessions.
+  are discovered and launch in the terminal.
 - **Phase 2 done.** The desktop app: a Design 2.0 window with the sessions
   sidebar (Needs you, Active, Recent, Projects), a tab per session with its
   status, branch and controls, a terminal beside or below the agent, find,
@@ -20,7 +20,9 @@ Status:
 - **Phase 4 done (Claude Code).** The read-only Subagent Inspector: tabs for
   each subagent under the agent's terminal and a live transcript viewer;
   see [docs/INSPECTOR.md](docs/INSPECTOR.md).
-- Next: harness adapters beyond Claude Code (Phase 3).
+- **Phase 3 (first round).** All ten harnesses launch and run; Codex and
+  Grok resume; five report their status. What each supports, and how it was
+  checked, is in [docs/HARNESSES.md](docs/HARNESSES.md).
 
 Install: `./install.sh agents` (builds, installs to `~/.local/bin`, and
 enables `nyx-agentd.socket`, which starts the manager on first use).

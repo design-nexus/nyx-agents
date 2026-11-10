@@ -725,10 +725,18 @@ fn fill_new_menu() {
             b.append(&v);
         }
         row.set_child(Some(&b));
-        row.set_tooltip_text(Some(&match h.tier {
-            nyx_agents_proto::Tier::Native => format!("{}: launch, resume and status", h.name),
-            _ => format!("{}: runs in a terminal (no harness-specific features yet)", h.name),
-        }));
+        let c = &h.capabilities;
+        let mut can = vec!["runs in a terminal"];
+        if c.program_status {
+            can.push("reports its status");
+        }
+        if c.resume {
+            can.push("can be resumed");
+        }
+        if c.subagents.is_some() {
+            can.push("subagents shown");
+        }
+        row.set_tooltip_text(Some(&format!("{}: {}", h.name, can.join(", "))));
         ui.new_list.append(&row);
     }
 }

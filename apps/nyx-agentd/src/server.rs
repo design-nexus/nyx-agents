@@ -77,10 +77,14 @@ impl Daemon {
         if !self.harness(&s.harness).is_some_and(|h| h.capabilities.resume) {
             return false;
         }
+        // Each harness only has something to resume once a conversation began.
         match s.harness.as_str() {
-            // Claude Code only has something to resume once a conversation began.
             "claude" => adapters::claude_transcript(&s.cwd, hs).exists(),
-            _ => true,
+            "codex" => nyx_agents_core::codex::has_session(hs, s.created),
+            "grok" => std::fs::read_dir(paths::home().join(".grok/sessions"))
+                .map(|it| it.flatten().any(|e| e.path().join(hs).is_dir()))
+                .unwrap_or(false),
+            _ => false,
         }
     }
 }
@@ -382,6 +386,41 @@ fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), Rpc
     Ok(())
 }
 
+/// Learn a Codex session's own id from the rollout Codex writes for it.
+/// Read only; inotify wakes it, the timeout only notices the session ending.
+fn watch_codex(d: Arc<Daemon>, id: String) {
+    use nyx_agents_core::{codex, inotify::Watcher};
+    let Some((cwd, since)) = d
+        .sessions
+        .lock()
+        .unwrap()
+        .get(&id)
+        .and_then(|s| (s.harness == "codex" && s.harness_session.is_none()).then(|| (s.cwd.clone(), s.created)))
+    else {
+        return;
+    };
+    let Ok(w) = Watcher::new() else { return };
+    loop {
+        for dir in codex::day_dirs(since) {
+            w.add(&dir);
+            if let Some(parent) = dir.parent() {
+                w.add(parent);
+            }
+        }
+        let taken: Vec<String> = d.sessions.lock().unwrap().values().filter_map(|s| s.harness_session.clone()).collect();
+        if let Some(found) = codex::find_session(&cwd, since, &taken) {
+            d.update(&id, |s| s.harness_session = Some(found));
+            return;
+        }
+        let live =
+            d.sessions.lock().unwrap().get(&id).is_some_and(|s| matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting));
+        if !live {
+            return;
+        }
+        w.wait(Duration::from_secs(2));
+    }
+}
+
 /// Follow a Claude session's subagents from its transcripts while it runs.
 /// Read only; inotify wakes it, the timeout only notices the session ending.
 fn watch_subagents(d: Arc<Daemon>, id: String) {
@@ -421,7 +460,12 @@ fn monitor(d: Arc<Daemon>, id: String) {
     {
         let d = d.clone();
         let id = id.clone();
-        std::thread::spawn(move || watch_subagents(d, id));
+        let harness = d.sessions.lock().unwrap().get(&id).map(|s| s.harness.clone()).unwrap_or_default();
+        match harness.as_str() {
+            "claude" => std::thread::spawn(move || watch_subagents(d, id)),
+            "codex" => std::thread::spawn(move || watch_codex(d, id)),
+            _ => std::thread::spawn(|| {}),
+        };
     }
     let ended_cleanly = (|| -> std::io::Result<bool> {
         let mut stream = UnixStream::connect(paths::session_socket(&id))?;

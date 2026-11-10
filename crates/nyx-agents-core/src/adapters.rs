@@ -45,7 +45,7 @@ const BUILTINS: &[Builtin] = &[
         mise: &["codex"],
         auth_files: &[".codex/auth.json"],
         auth_env: &["OPENAI_API_KEY"],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
     Builtin {
         id: "antigravity",
@@ -82,7 +82,7 @@ const BUILTINS: &[Builtin] = &[
         mise: &["grok"],
         auth_files: &[".grok/auth.json"],
         auth_env: &["XAI_API_KEY"],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
     Builtin {
         id: "crush",
@@ -168,6 +168,12 @@ fn caps(id: &str) -> Capabilities {
             subagents: Some(nyx_agents_proto::SubagentSource::Transcript),
             ..Default::default()
         },
+        // Verified: `grok --session-id <UUID>` starts a conversation with that id; `-r` resumes it.
+        "grok" => Capabilities { preset_session_id: true, resume: true, program_status: true, ..Default::default() },
+        // Verified: `codex resume <UUID>`. The id is read from Codex's rollout once it exists.
+        "codex" => Capabilities { resume: true, ..Default::default() },
+        // Seen reporting OSC 7501 status when launched (2026-11-10).
+        "antigravity" | "omp" | "crush" | "opencode" => Capabilities { program_status: true, ..Default::default() },
         _ => Capabilities::default(),
     }
 }
@@ -225,7 +231,7 @@ fn exe_for(h: &Harness) -> Result<PathBuf, String> {
 pub fn launch(h: &Harness, args: &[String]) -> Result<Plan, String> {
     let exe = exe_for(h)?.display().to_string();
     let plan = match h.id.as_str() {
-        "claude" => {
+        "claude" | "grok" => {
             let id = crate::new_uuid();
             let mut argv = vec![exe, "--session-id".into(), id.clone()];
             argv.extend(args.iter().cloned());
@@ -251,7 +257,10 @@ pub fn launch(h: &Harness, args: &[String]) -> Result<Plan, String> {
 pub fn resume(h: &Harness, s: &Session) -> Result<Plan, String> {
     let exe = exe_for(h)?.display().to_string();
     match (h.id.as_str(), s.harness_session.as_deref()) {
-        ("claude", Some(id)) => Ok(Plan { argv: vec![exe, "--resume".into(), id.into()], harness_session: Some(id.into()) }),
+        ("claude" | "grok", Some(id)) => {
+            Ok(Plan { argv: vec![exe, "--resume".into(), id.into()], harness_session: Some(id.into()) })
+        }
+        ("codex", Some(id)) => Ok(Plan { argv: vec![exe, "resume".into(), id.into()], harness_session: Some(id.into()) }),
         _ => Err(format!("{} sessions cannot be resumed yet", h.name)),
     }
 }
