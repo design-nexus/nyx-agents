@@ -88,6 +88,7 @@ mod imp {
         pub(super) state: RefCell<Option<State>>,
         pub(super) handlers: Handlers,
         pub(super) read_only: Cell<bool>,
+        pub(super) answers_queries: Cell<bool>,
         pub(super) focused: Cell<bool>,
         pub(super) buttons: Cell<u32>,
         pub(super) selecting: Cell<bool>,
@@ -180,6 +181,7 @@ impl TerminalView {
             stats: Stats::default(),
         });
         imp.read_only.set(read_only);
+        imp.answers_queries.set(true);
         obj.set_focusable(!read_only);
         obj.set_focus_on_click(!read_only);
         obj.install_controllers();
@@ -192,6 +194,14 @@ impl TerminalView {
 
     pub fn is_read_only(&self) -> bool {
         self.imp().read_only.get()
+    }
+
+    /// Whether this view answers the program's terminal queries (cursor
+    /// position, colours, modes). Turn it off when something else owns the
+    /// program's terminal and answers for it, such as a session holder;
+    /// otherwise the program would get every answer twice.
+    pub fn set_answers_queries(&self, answers: bool) {
+        self.imp().answers_queries.set(answers);
     }
 
     /// Run `f` on the terminal (for example to read text or take a snapshot).
@@ -287,7 +297,9 @@ impl TerminalView {
         let h = &self.imp().handlers;
         // A viewer must not answer for the program's real terminal.
         if !self.is_read_only() {
-            self.send(&fx.reply);
+            if self.imp().answers_queries.get() {
+                self.send(&fx.reply);
+            }
             for c in &fx.clipboard {
                 let clip = if c.primary { self.primary_clipboard() } else { self.clipboard() };
                 clip.set_text(&c.text);

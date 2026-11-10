@@ -13,7 +13,15 @@ Status:
   outlive the app and the manager; `nyx-agents` is its command line. Claude
   Code launches, runs and reattaches through it; the other nine harnesses
   are discovered and launch as plain terminal sessions.
-- The desktop app comes next.
+- **Phase 2 done.** The desktop app: a Design 2.0 window with the sessions
+  sidebar (Needs you, Active, Recent, Projects), a tab per session with its
+  status, branch and controls, a terminal beside or below the agent, find,
+  restore of open tabs and splits, and `--open session/ID` deep links.
+- Next: harness adapters beyond Claude Code (Phase 3) and the read-only
+  subagent inspector (Phase 4).
+
+Install: `./install.sh agents` (builds, installs to `~/.local/bin`, and
+enables `nyx-agentd.socket`, which starts the manager on first use).
 
 ## Command line
 

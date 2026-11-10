@@ -50,7 +50,8 @@ const BUILTINS: &[Builtin] = &[
     Builtin {
         id: "antigravity",
         name: "Antigravity CLI",
-        exe: &["agy", "antigravity"],
+        // Only the CLI: /usr/bin/antigravity is the Antigravity IDE.
+        exe: &["agy"],
         mise: &["antigravity-cli"],
         auth_files: &[],
         auth_env: &[],
@@ -141,7 +142,7 @@ pub fn generic_defs() -> Vec<GenericDef> {
         .map(|c| c.harness)
         .unwrap_or_default()
         .into_iter()
-        .filter(|g| !g.command.is_empty() && !BUILTINS.iter().any(|b| b.id == g.id))
+        .filter(|g| !g.command.is_empty() && g.id != "shell" && !BUILTINS.iter().any(|b| b.id == g.id))
         .collect()
 }
 
@@ -184,6 +185,17 @@ pub fn harnesses(versions: bool) -> Vec<Harness> {
             }
         })
         .collect();
+    // A plain shell, for a terminal beside an agent.
+    let shell = std::env::var("SHELL").ok().filter(|s| Path::new(s).is_absolute()).unwrap_or_else(|| "/bin/sh".into());
+    out.push(Harness {
+        id: "shell".into(),
+        name: "Terminal".into(),
+        tier: Tier::Terminal,
+        version: None,
+        path: Some(shell),
+        auth: AuthState::Unknown,
+        capabilities: Capabilities::default(),
+    });
     for g in generic_defs() {
         let exe = Path::new(&g.command[0]);
         let path = if exe.is_absolute() { Some(exe.to_path_buf()) } else { discover::find(&[g.command[0].as_str()], &[]) };

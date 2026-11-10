@@ -1,0 +1,52 @@
+/* Nyx Agents on top of the shared 2.0 base. Colours come from theme tokens. */
+
+.agents-window .session-bar {
+  min-height: 34px;
+  padding: 0 8px;
+  border-bottom: 1px solid @hairline;
+}
+
+.agents-window .session-bar .session-title {
+  font-weight: 600;
+}
+
+.agents-window .session-bar .session-meta {
+  color: @theme_dim_text;
+}
+
+.agents-window .status-pill {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.85em;
+  background: @lift;
+}
+
+.agents-window .status-pill.working { background: alpha(@theme_accent, 0.22); }
+.agents-window .status-pill.blocked { background: alpha(@theme_danger, 0.30); }
+.agents-window .status-pill.done { background: alpha(@theme_highlight, 0.30); }
+
+.agents-window .ended-banner {
+  padding: 6px 10px;
+  background: @lift;
+  border-bottom: 1px solid @hairline;
+}
+
+.agents-window .find-bar {
+  padding: 4px 8px;
+  border-bottom: 1px solid @hairline;
+}
+
+.agents-window paned > separator {
+  min-width: 1px;
+  min-height: 1px;
+  background: @hairline;
+}
+
+.agents-window .new-session-list row {
+  padding: 6px 8px;
+}
+
+.agents-window .new-session-list .harness-version {
+  color: @theme_dim_text;
+  font-size: 0.85em;
+}

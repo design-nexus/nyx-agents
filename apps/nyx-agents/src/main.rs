@@ -1,5 +1,6 @@
-//! nyx-agents: the command line (the desktop app comes in Phase 2).
+//! nyx-agents: the desktop app, and its command line.
 //!
+//!   nyx-agents [--open session/ID]       the window (ID may be a prefix)
 //!   nyx-agents harnesses [--json] [--refresh]
 //!   nyx-agents ls [--json]
 //!   nyx-agents status ID [--json]
@@ -11,8 +12,15 @@
 //! IDs may be shortened to any unique prefix.
 
 mod cli;
+mod ui;
+
+const COMMANDS: &[&str] =
+    &["harnesses", "ls", "status", "launch", "attach", "resume", "stop", "forget", "hub", "help", "-h", "--help"];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    std::process::exit(cli::run(&args));
+    if args.first().is_some_and(|a| COMMANDS.contains(&a.as_str())) {
+        std::process::exit(cli::run(&args));
+    }
+    std::process::exit(ui::run());
 }

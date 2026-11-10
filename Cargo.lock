@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -588,6 +594,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "gio-unix"
+version = "0.22.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce8d768735e229742c135afa3d3326604088d2df0679901cdb05e791fe2fbe0a"
+dependencies = [
+ "gio",
+ "gio-unix-sys",
+ "glib",
+ "libc",
+]
+
+[[package]]
+name = "gio-unix-sys"
+version = "0.22.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c01dbb58f92f67548d85e2209e073acc7ee04e107c7e04ee69b49e38b4933b4"
+dependencies = [
+ "gio-sys",
+ "glib-sys",
+ "gobject-sys",
+ "libc",
+ "system-deps",
+]
+
+[[package]]
 name = "glib"
 version = "0.22.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -887,12 +918,20 @@ dependencies = [
 name = "nyx-agents"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "gtk4",
  "libc",
  "nyx-agents-client",
  "nyx-agents-core",
  "nyx-agents-proto",
+ "nyx-core",
  "nyx-term",
+ "nyx-term-gtk",
+ "nyx-theme",
+ "nyx-ui",
+ "serde",
  "serde_json",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -926,6 +965,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyx-core"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=4378e243aeb09733843996663cd9a5a7f0cbb821#4378e243aeb09733843996663cd9a5a7f0cbb821"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "serde",
+ "serde_json",
+ "toml 1.2.1+spec-1.1.0",
+]
+
+[[package]]
+name = "nyx-desktop"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=4378e243aeb09733843996663cd9a5a7f0cbb821#4378e243aeb09733843996663cd9a5a7f0cbb821"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gio",
+ "gio-unix",
+ "glib",
+ "serde",
+ "serde_json",
+ "toml 1.2.1+spec-1.1.0",
+]
+
+[[package]]
 name = "nyx-pty"
 version = "0.1.0"
 dependencies = [
@@ -945,6 +1011,39 @@ version = "0.1.0"
 dependencies = [
  "gtk4",
  "nyx-term",
+]
+
+[[package]]
+name = "nyx-theme"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=40db521bab468d54f18f65c6aabd7fc8533d6a4d#40db521bab468d54f18f65c6aabd7fc8533d6a4d"
+dependencies = [
+ "gtk4",
+ "nyx-core",
+ "nyx-theme-core",
+ "toml 1.2.1+spec-1.1.0",
+]
+
+[[package]]
+name = "nyx-theme-core"
+version = "0.2.0"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=40db521bab468d54f18f65c6aabd7fc8533d6a4d#40db521bab468d54f18f65c6aabd7fc8533d6a4d"
+dependencies = [
+ "nyx-core",
+ "serde",
+ "serde_json",
+ "toml 1.2.1+spec-1.1.0",
+]
+
+[[package]]
+name = "nyx-ui"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=40db521bab468d54f18f65c6aabd7fc8533d6a4d#40db521bab468d54f18f65c6aabd7fc8533d6a4d"
+dependencies = [
+ "gtk4",
+ "nyx-core",
+ "nyx-desktop",
+ "nyx-theme",
 ]
 
 [[package]]

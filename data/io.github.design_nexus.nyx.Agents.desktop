@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Agents
+GenericName=AI Coding Agents
+Comment=Run coding agents in Ghostty-based terminals and watch what they do
+Exec=nyx-agents %U
+Icon=io.github.design_nexus.nyx.Agents
+Terminal=false
+Categories=Development;
+Keywords=claude;codex;agent;ai;terminal;ghostty;
+StartupWMClass=io.github.design_nexus.nyx.Agents
+SingleMainWindow=true
