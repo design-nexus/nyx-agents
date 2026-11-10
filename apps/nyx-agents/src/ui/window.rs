@@ -35,6 +35,7 @@ struct Ui {
     restored: Cell<bool>,
     actions: Rc<Actions>,
     pending_open: RefCell<Option<String>>,
+    viewing: RefCell<Option<String>>,
 }
 
 thread_local! {
@@ -238,6 +239,7 @@ fn build(app: &gtk::Application) {
         restored: Cell::new(false),
         actions: actions(),
         pending_open: RefCell::new(None),
+        viewing: RefCell::new(None),
     });
     UI.with(|u| *u.borrow_mut() = Some(ui));
 
@@ -249,6 +251,7 @@ fn build(app: &gtk::Application) {
             }
         }
     });
+    window.connect_is_active_notify(|_| report_viewing());
     window.connect_close_request(|_| {
         save_tabs();
         prefs::flush();
@@ -514,6 +517,17 @@ fn select_tab(i: usize) {
     refresh_tabs();
     refresh_sidebar();
     prefs::update(|pr| pr.active = i);
+    report_viewing();
+}
+
+/// Tell the manager which session is on screen, so it doesn't notify about it.
+fn report_viewing() {
+    let Some(ui) = cur() else { return };
+    let id = ui.window.is_active().then(|| ui.pages.borrow().get(ui.active.get()).map(|p| p.borrow().id.clone())).flatten();
+    if ui.viewing.replace(id.clone()) == id {
+        return;
+    }
+    daemon::request(move |c| c.call::<serde_json::Value>(nyx_agents_proto::Call::Viewing { id }), |_| {});
 }
 
 fn close_tab(i: usize) {
@@ -529,6 +543,7 @@ fn close_tab(i: usize) {
         select_tab(ui.active.get().min(n - 1).saturating_sub(usize::from(i < ui.active.get())));
     } else {
         ui.active.set(0);
+        report_viewing();
     }
     refresh_tabs();
     refresh_sidebar();

@@ -266,6 +266,12 @@ pub enum Call {
         id: SessionId,
         title: String,
     },
+    /// The session the user is looking at in the app (none when the window
+    /// is not focused). It is not notified about.
+    #[serde(rename = "sessions.viewing")]
+    Viewing {
+        id: Option<SessionId>,
+    },
     #[serde(rename = "projects.list")]
     ListProjects,
     #[serde(rename = "workspaces.list")]

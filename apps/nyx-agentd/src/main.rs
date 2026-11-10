@@ -12,6 +12,7 @@
 
 mod control;
 mod holder;
+mod notify;
 mod peer;
 mod server;
 

@@ -18,4 +18,5 @@ nyx-term.workspace = true
 nyx-pty.workspace = true
 libc.workspace = true
 serde_json.workspace = true
+toml = "0.9"
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }

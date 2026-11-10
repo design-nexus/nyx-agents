@@ -22,6 +22,11 @@ type Writer = Arc<Mutex<UnixStream>>;
 
 pub struct Daemon {
     sessions: Mutex<HashMap<String, Session>>,
+    /// The session on screen in the app, if its window is focused.
+    viewing: Mutex<Option<String>>,
+    /// Sessions the user asked to stop (their exit is not news).
+    stopping: Mutex<Vec<String>>,
+    notifier: Mutex<Option<Arc<crate::notify::Notifier>>>,
     subscribers: Mutex<Vec<Writer>>,
     harnesses: Mutex<Vec<Harness>>,
     log: PathBuf,
@@ -62,6 +67,38 @@ impl Daemon {
         };
         self.changed(&s);
         Some(s)
+    }
+
+    /// Tell the user about a change worth their attention, unless they are
+    /// looking at that session already.
+    fn notice(&self, before: &Session, after: &Session) {
+        use nyx_agents_proto::Activity as A;
+        if self.viewing.lock().unwrap().as_deref() == Some(after.id.as_str()) || !crate::notify::enabled() {
+            return;
+        }
+        let Some(n) = self.notifier.lock().unwrap().clone() else { return };
+        let who = self.harness(&after.harness).map(|h| h.name).unwrap_or_else(|| after.harness.clone());
+        // Say which session it is, so one agent can't pass for another.
+        let body = |fallback: &str| {
+            let msg = after.status.message.clone().unwrap_or_else(|| fallback.to_string());
+            format!("{}\n{msg}", after.title)
+        };
+        let (b, a) = (before.status.activity, after.status.activity);
+        if after.lifecycle == Lifecycle::Running && a != b {
+            match a {
+                A::Blocked => n.send(&after.id, &format!("{who} needs you"), &body("Waiting for your answer"), true),
+                A::Done => n.send(&after.id, &format!("{who} finished"), &body("Ready for you to look at"), false),
+                A::Error => n.send(&after.id, &format!("{who} hit an error"), &body("It stopped working"), true),
+                _ => {}
+            }
+        }
+        if before.lifecycle == Lifecycle::Running && after.lifecycle == Lifecycle::Exited {
+            let asked = self.stopping.lock().unwrap().iter().any(|s| *s == after.id);
+            if !asked && after.exit_code.is_some_and(|c| c != 0) && after.harness != "shell" {
+                let code = after.exit_code.unwrap_or_default();
+                n.send(&after.id, &format!("{who} ended unexpectedly"), &format!("{}\nExit code {code}", after.title), true);
+            }
+        }
     }
 
     fn harness(&self, id: &str) -> Option<Harness> {
@@ -105,6 +142,9 @@ pub fn run() -> i32 {
     };
     let d = Arc::new(Daemon {
         sessions: Mutex::new(HashMap::new()),
+        viewing: Mutex::new(None),
+        stopping: Mutex::new(Vec::new()),
+        notifier: Mutex::new(None),
         subscribers: Mutex::new(Vec::new()),
         harnesses: Mutex::new(Vec::new()),
         log: paths::state_dir().join("nyx-agentd.log"),
@@ -143,6 +183,9 @@ pub fn run() -> i32 {
 
     // Kept for the process lifetime; dropping it would release the name.
     let _bus = if std::env::var_os("NYX_AGENTS_NO_DBUS").is_some() { None } else { crate::control::serve(d.clone()) };
+    if std::env::var_os("NYX_AGENTS_NO_DBUS").is_none() {
+        *d.notifier.lock().unwrap() = crate::notify::Notifier::new();
+    }
 
     for stream in listener.incoming().flatten() {
         if !crate::peer::same_user(&stream) {
@@ -236,6 +279,7 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
                 .pid
                 .filter(|_| s.lifecycle == Lifecycle::Running)
                 .ok_or_else(|| err("not-running", "session is not running"))?;
+            d.stopping.lock().unwrap().push(id.clone());
             // The agent leads its own process group on its pty.
             let sig = if force { libc::SIGKILL } else { libc::SIGHUP };
             unsafe { libc::kill(-(pid as i32), sig) };
@@ -269,6 +313,10 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
                 }
             }
             serde_json::to_value(seen.into_values().collect::<Vec<_>>()).unwrap()
+        }
+        Call::Viewing { id } => {
+            *d.viewing.lock().unwrap() = id;
+            json!({})
         }
         // Agent workspaces arrive with the compositor's API; none exist yet.
         Call::ListWorkspaces => json!([]),
@@ -480,7 +528,8 @@ fn monitor(d: Arc<Daemon>, id: String) {
             let Ok(ev) = serde_json::from_str::<HolderEvent>(&line?) else { continue };
             let exited = matches!(ev, HolderEvent::Exited { .. });
             let resumable = d.sessions.lock().unwrap().get(&id).map(|s| d.resumable(s)).unwrap_or(false);
-            d.update(&id, |s| match ev {
+            let before = d.sessions.lock().unwrap().get(&id).cloned();
+            let after = d.update(&id, |s| match ev {
                 HolderEvent::Started { pid } => {
                     s.pid = Some(pid);
                     if s.lifecycle == Lifecycle::Starting {
@@ -500,7 +549,11 @@ fn monitor(d: Arc<Daemon>, id: String) {
                     s.resumable = resumable;
                 }
             });
+            if let (Some(b), Some(a)) = (before, after) {
+                d.notice(&b, &a);
+            }
             if exited {
+                d.stopping.lock().unwrap().retain(|s| *s != id);
                 return Ok(true);
             }
         }
