@@ -132,7 +132,15 @@ fn harness_icon(h: &str) -> String {
 
 fn chip(text: &str, kind: &str) -> Node {
     let n = label(nb(text)).class("chip");
-    if kind.is_empty() { n } else { n.class(kind) }
+    // QML hosts don't load style.css; they colour labels by these classes.
+    let tone = match kind {
+        "ok" => "success",
+        "warn" => "warning",
+        "bad" => "danger",
+        _ => "",
+    };
+    let n = if kind.is_empty() { n } else { n.class(kind) };
+    if tone.is_empty() { n } else { n.class(tone) }
 }
 
 fn section(text: &str) -> Node {
@@ -247,7 +255,7 @@ pub fn popover(st: &State) -> Node {
     }
     let tab = |t: Tab, name: &str, action: &str| {
         let b = button(action, Some(name), None).class("tab").expand();
-        if st.tab == t { b.class("on") } else { b }
+        if st.tab == t { b.class("on").class("active") } else { b }
     };
     top.push(
         hbox([tab(Tab::Agents, "Agents", "tab:agents"), tab(Tab::Usage, "Usage", "tab:usage"), tab(Tab::Sessions, "Sessions", "tab:sessions"), tab(Tab::Local, "Local AI", "tab:local")])
@@ -552,7 +560,7 @@ fn agent_page(st: &State, h: &str) -> Node {
     out.push(card(quota));
     let range = |r: Range, name: &str, action: &str| {
         let b = button(action, Some(name), None).class("tab");
-        if st.range == r { b.class("on") } else { b }
+        if st.range == r { b.class("on").class("active") } else { b }
     };
     let mut models = vec![card_head(
         "Models",
@@ -630,7 +638,7 @@ fn sessions_tab(st: &State) -> Node {
     let filt = |id: Option<&str>, name: String| {
         let action = format!("filter:{}", id.unwrap_or("all"));
         let b = button(&action, Some(&name), None).class("tab");
-        if st.filter.as_deref() == id { b.class("on") } else { b }
+        if st.filter.as_deref() == id { b.class("on").class("active") } else { b }
     };
     let mut filters = vec![filt(None, "All".into())];
     for a in agents.iter().take(6) {
