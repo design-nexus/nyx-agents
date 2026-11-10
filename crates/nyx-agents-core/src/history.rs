@@ -23,8 +23,16 @@ fn plausible_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 100 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// The files that hold a session: Claude Code's transcript and its subagents'
-/// folder; Codex's rollouts (one per resume).
+/// Agents whose sessions are files of their own, so they can go to the Trash.
+/// OpenCode, Hermes and Crush keep every session as rows of one database.
+pub fn trashable(harness: &str) -> bool {
+    matches!(harness, "claude" | "codex" | "grok" | "cursor" | "muse" | "antigravity" | "omp")
+}
+
+/// The files and folders that hold a session: Claude Code's transcript and its
+/// subagents' folder; Codex's rollouts (one per resume); Grok's and Muse's session
+/// folders; Cursor's chat folder and agent transcript; Antigravity's brain folder
+/// and conversation database; oh-my-pi's session file.
 pub fn records(harness: &str, id: &str) -> Vec<PathBuf> {
     if !plausible_id(id) {
         return vec![];
@@ -44,6 +52,30 @@ pub fn records(harness: &str, id: &str) -> Vec<PathBuf> {
             for d in ["sessions", "archived_sessions"] {
                 find(&base.join(d), 4, &is_rollout, &mut out);
             }
+        }
+        "grok" => find(&crate::usage::grok::base().join("sessions"), 1, &|p| p.is_dir() && p.file_name().is_some_and(|n| n == id), &mut out),
+        "muse" => find(&crate::usage::muse::base().join("sessions"), 3, &|p| p.is_dir() && p.file_name().is_some_and(|n| n == id), &mut out),
+        "cursor" => {
+            let named = |p: &Path| p.file_name().is_some_and(|n| n == id || n.to_string_lossy() == format!("{id}.jsonl") || n.to_string_lossy() == format!("{id}.txt"));
+            for chats in [crate::usage::cursor::config_home().join("chats"), crate::usage::cursor::data_home().join("chats")] {
+                find(&chats, 1, &|p| p.is_dir() && p.file_name().is_some_and(|n| n == id), &mut out);
+            }
+            let projects = crate::usage::cursor::data_home().join("projects");
+            for project in std::fs::read_dir(&projects).into_iter().flatten().flatten() {
+                find(&project.path().join("agent-transcripts"), 0, &named, &mut out);
+            }
+        }
+        "antigravity" => {
+            let base = crate::usage::antigravity::base();
+            out.push(base.join("brain").join(id));
+            for ext in ["db", "db-wal", "db-shm"] {
+                out.push(base.join("conversations").join(format!("{id}.{ext}")));
+            }
+            out.retain(|p| p.exists());
+        }
+        "omp" => {
+            let suffix = format!("_{id}.jsonl");
+            find(&crate::paths::home().join(".omp/agent/sessions"), 1, &|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(&suffix)), &mut out);
         }
         _ => {}
     }
@@ -87,6 +119,88 @@ fn plain(s: &str) -> String {
     out
 }
 
+/// The text of a content field: a string, or the text blocks of a list.
+fn content_text(c: &serde_json::Value) -> String {
+    match c {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(blocks) => {
+            blocks.iter().filter_map(|b| b.as_str().or(b["text"].as_str())).collect::<Vec<_>>().join(" ")
+        }
+        _ => String::new(),
+    }
+}
+
+/// A transcript in one of the common shapes (`{role, content}`, `{message: {role,
+/// content}}`, Antigravity's `{type: USER_INPUT, content}`) as "you:" and "agent:"
+/// lines.
+fn generic_transcript(body: &str) -> String {
+    let mut out = String::new();
+    for line in body.lines() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+        let m = if v["message"].is_object() { &v["message"] } else { &v };
+        let role = m["role"].as_str().or(v["role"].as_str()).or(v["type"].as_str()).unwrap_or("");
+        let who = match role {
+            "user" | "USER_INPUT" => "you",
+            "assistant" | "PLANNER_RESPONSE" => "agent",
+            _ => continue,
+        };
+        let text = content_text(if m["content"].is_null() { &v["content"] } else { &m["content"] });
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let short: String = text.chars().take(600).collect();
+        out.push_str(&format!("{who}: {short}\n\n"));
+    }
+    out
+}
+
+/// Muse's records (each line, and the records nested in its `children`): the
+/// prompts that started runs and the replies committed.
+fn muse_transcript(body: &str) -> String {
+    let mut out = String::new();
+    for line in body.lines() {
+        let Ok(o) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+        let mut recs = vec![];
+        if o.get("payload_type").is_some() {
+            recs.push(o.clone());
+        }
+        for c in o["children"].as_array().into_iter().flatten() {
+            if let Some(r) = c["record_json"].as_str().and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok()) {
+                recs.push(r);
+            }
+        }
+        for r in recs.iter().filter(|r| r["payload_type"] == "runtime.session") {
+            let e = &r["payload"]["event"];
+            let (who, text) = match e["kind"].as_str() {
+                Some("started") => ("you", e["prompt"].as_str()),
+                Some("assistant_message_committed") => ("agent", e["text"].as_str()),
+                _ => continue,
+            };
+            if let Some(t) = text.map(str::trim).filter(|t| !t.is_empty()) {
+                out.push_str(&format!("{who}: {}\n\n", t.chars().take(600).collect::<String>()));
+            }
+        }
+    }
+    out
+}
+
+/// The transcript file of a session, for the agents read generically.
+fn transcript_file(harness: &str, files: &[PathBuf]) -> Option<PathBuf> {
+    let first_file = |name: &str| files.iter().map(|f| f.join(name)).find(|p| p.is_file());
+    match harness {
+        "grok" => first_file("chat_history.jsonl"),
+        "muse" => first_file("session.jsonl"),
+        "antigravity" => first_file(".system_generated/logs/transcript.jsonl"),
+        "omp" => files.iter().find(|f| f.is_file()).cloned(),
+        "cursor" => files
+            .iter()
+            .flat_map(|f| if f.is_dir() { std::fs::read_dir(f).into_iter().flatten().flatten().map(|e| e.path()).collect() } else { vec![f.clone()] })
+            .find(|p| p.extension().is_some_and(|x| x == "jsonl") && p.parent().is_some_and(|d| d.ends_with("agent-transcripts") || d.parent().is_some_and(|g| g.ends_with("agent-transcripts")))),
+        _ => None,
+    }
+}
+
 /// The transcript as plain text, at most `max` bytes from its end.
 pub fn peek(harness: &str, id: &str, max: usize) -> Option<String> {
     let files: Vec<PathBuf> = records(harness, id).into_iter().filter(|p| p.is_file()).collect();
@@ -100,7 +214,11 @@ pub fn peek(harness: &str, id: &str, max: usize) -> Option<String> {
             }
             crate::codex::render(&all)
         }
-        _ => return None,
+        _ => {
+            let all = records(harness, id);
+            let body = std::fs::read_to_string(transcript_file(harness, &all)?).ok()?;
+            if harness == "muse" { muse_transcript(&body) } else { generic_transcript(&body) }
+        }
     };
     let text = plain(&text);
     if text.len() <= max {
@@ -170,6 +288,19 @@ pub fn terminal_command(argv: &[String], cwd: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_common_transcript_shapes() {
+        let body = [
+            r#"{"type":"system","content":"You are an agent"}"#,
+            r#"{"role":"user","content":"fix the header"}"#,
+            r#"{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"Done."},{"type":"toolCall"}]}}"#,
+            r#"{"type":"USER_INPUT","content":"and the footer"}"#,
+        ]
+        .join("\n");
+        assert_eq!(generic_transcript(&body), "you: fix the header\n\nagent: Done.\n\nyou: and the footer\n\n");
+        assert!(trashable("grok") && !trashable("opencode"));
+    }
 
     #[test]
     fn peeks_as_plain_text() {

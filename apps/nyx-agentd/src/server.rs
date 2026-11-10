@@ -414,8 +414,8 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
             serde_json::to_value(u).unwrap()
         }
         Call::ListHistory { harness, query, limit } => {
-            if d.history.lock().unwrap().is_empty() {
-                for a in usage::AGENTS {
+            for a in usage::AGENTS {
+                if !d.history.lock().unwrap().contains_key(*a) {
                     d.scan_usage(a, false);
                 }
             }
@@ -495,7 +495,7 @@ fn list_history(d: &Arc<Daemon>, harness: Option<&str>, query: Option<&str>, lim
                 active,
                 managed: m.map(|(id, _)| id.clone()),
                 resumable,
-                can_trash: !active,
+                can_trash: !active && nyx_agents_core::history::trashable(agent),
             });
         }
     }
