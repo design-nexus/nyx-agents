@@ -38,6 +38,18 @@ pub fn default_harness() -> Option<String> {
     get_str(&config(), "sessions", "default_harness")
 }
 
+pub fn set_default_harness(id: &str) -> std::io::Result<()> {
+    set("sessions", "default_harness", toml::Value::String(id.into()))
+}
+
+pub fn notifications() -> bool {
+    get_bool(&config(), "notifications", "enabled", true)
+}
+
+pub fn set_notifications(on: bool) -> std::io::Result<()> {
+    set("notifications", "enabled", toml::Value::Boolean(on))
+}
+
 fn harnesses() -> (Vec<Harness>, bool) {
     match Client::connect("nyx-agents-settings").and_then(|mut c| c.harnesses(false)) {
         Ok(h) => (h, true),

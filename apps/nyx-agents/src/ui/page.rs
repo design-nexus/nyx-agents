@@ -10,6 +10,8 @@ use gtk::{gdk, glib};
 use nyx_agents_proto::{Activity, AttachMode, Lifecycle, Session};
 use nyx_term_gtk::TerminalView;
 
+use nyx_ui::menu;
+
 use super::daemon::{self, Attached};
 use super::inspector::Inspector;
 use super::theme;
@@ -31,7 +33,6 @@ pub struct Pane {
 pub struct Page {
     pub id: String,
     pub root: gtk::Box,
-    title: gtk::Label,
     meta: gtk::Label,
     pill: gtk::Label,
     stop: gtk::Button,
@@ -52,6 +53,7 @@ pub struct Page {
 type IdFn = Rc<dyn Fn(&str)>;
 type SplitFn = Rc<dyn Fn(&str, bool)>;
 type SourceFn = Rc<dyn Fn(&str) -> Option<nyx_agents_proto::SubagentSource>>;
+type MenuFn = Rc<dyn Fn(&str) -> Vec<menu::Entry>>;
 
 pub struct Actions {
     pub stop: IdFn,
@@ -68,6 +70,8 @@ pub struct Actions {
     pub ended: IdFn,
     /// Where a harness's subagent activity can be read, if anywhere.
     pub subagent_source: SourceFn,
+    /// A session's actions, for its right-click menus.
+    pub session_menu: MenuFn,
 }
 
 fn button(icon: &str, tooltip: &str) -> gtk::Button {
@@ -88,6 +92,24 @@ pub fn status_text(s: &Session) -> (&'static str, &'static str) {
             Activity::Unknown => ("Running", ""),
         },
     }
+}
+
+/// Copy, paste and select all for a terminal.
+fn terminal_entries(view: &TerminalView, live: bool) -> Vec<menu::Entry> {
+    let (v1, v2, v3) = (view.clone(), view.clone(), view.clone());
+    let mut entries = vec![
+        menu::item("Copy", move || {
+            v1.copy_selection();
+        })
+        .icon("edit-copy-symbolic")
+        .key("Ctrl+C")
+        .enabled(view.has_selection()),
+    ];
+    if live {
+        entries.push(menu::item("Paste", move || v2.paste_clipboard()).icon("edit-paste-symbolic").key("Ctrl+V"));
+    }
+    entries.push(menu::item("Select all", move || v3.select_all()).icon("edit-select-all-symbolic"));
+    entries
 }
 
 impl Pane {
@@ -169,6 +191,14 @@ impl Pane {
             Some(v) => {
                 v.set_hexpand(true);
                 v.set_vexpand(true);
+                let (id, session_menu) = (s.id.clone(), a.session_menu.clone());
+                menu::on_right_click(v, move |w, x, y| {
+                    let Some(view) = w.downcast_ref::<TerminalView>() else { return };
+                    let mut entries = terminal_entries(view, live);
+                    entries.push(menu::separator());
+                    entries.extend(session_menu(&id));
+                    menu::popup_at(w, x, y, entries);
+                });
                 p.root.append(v);
                 if live {
                     let v = v.clone();
@@ -223,9 +253,6 @@ impl Page {
 
         let bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         bar.add_css_class("session-bar");
-        let title = gtk::Label::new(None);
-        title.add_css_class("session-title");
-        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         let pill = gtk::Label::new(None);
         pill.add_css_class("status-pill");
         let meta = gtk::Label::new(None);
@@ -236,10 +263,10 @@ impl Page {
         let find = button("system-search-symbolic", "Find in the terminal (Ctrl+F)");
         let split_right = button("view-dual-symbolic", "Open a terminal beside the agent (Ctrl+Shift+O)");
         let split_down = button("view-paged-symbolic", "Open a terminal below the agent (Ctrl+Shift+E)");
-        let git = button("folder-git", "Open this repository in Nyx Git");
+        let git = button("nyx-agents-branch-symbolic", "Open this repository in Nyx Git");
         let workspace = button("video-display-symbolic", "Show the agent's workspace");
         let stop = button("media-playback-stop-symbolic", "Stop the agent");
-        for w in [title.upcast_ref::<gtk::Widget>(), pill.upcast_ref(), meta.upcast_ref(), find.upcast_ref()] {
+        for w in [pill.upcast_ref::<gtk::Widget>(), meta.upcast_ref(), find.upcast_ref()] {
             bar.append(w);
         }
         bar.append(&split_right);
@@ -299,7 +326,6 @@ impl Page {
         let page = Page {
             id: s.id.clone(),
             root,
-            title,
             meta,
             pill,
             stop,
@@ -383,7 +409,6 @@ impl Page {
     }
 
     pub fn update(&self, s: &Session, a: &Rc<Actions>) {
-        self.title.set_text(&s.title);
         let (text, class) = status_text(s);
         self.pill.set_text(text);
         for c in ["working", "blocked", "done"] {

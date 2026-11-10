@@ -3,11 +3,6 @@
 .agents-window .session-bar {
   min-height: 34px;
   padding: 0 8px;
-  border-bottom: 1px solid @hairline;
-}
-
-.agents-window .session-bar .session-title {
-  font-weight: 600;
 }
 
 .agents-window .session-bar .session-meta {
@@ -26,14 +21,14 @@
 .agents-window .status-pill.done { background: alpha(@theme_highlight, 0.30); }
 
 .agents-window .ended-banner {
+  margin: 0 8px 6px;
   padding: 6px 10px;
+  border-radius: 11px;
   background: @lift;
-  border-bottom: 1px solid @hairline;
 }
 
 .agents-window .find-bar {
   padding: 4px 8px;
-  border-bottom: 1px solid @hairline;
 }
 
 .agents-window paned > separator {
@@ -42,8 +37,26 @@
   background: @hairline;
 }
 
+.agents-window .new-session-menu {
+  min-width: 300px;
+}
+
+.agents-window .new-session-menu checkbutton {
+  padding: 2px 6px;
+}
+
+.agents-window .new-session-folder {
+  padding: 4px 8px;
+  border-radius: 7px;
+}
+
+.agents-window .new-session-list {
+  background: transparent;
+}
+
 .agents-window .new-session-list row {
   padding: 6px 8px;
+  border-radius: 7px;
 }
 
 .agents-window .new-session-list .harness-version {
@@ -53,7 +66,6 @@
 
 .agents-window .subagent-row {
   padding: 4px 8px;
-  border-top: 1px solid @hairline;
 }
 
 .agents-window .inspector-label {
@@ -72,5 +84,4 @@
 
 .agents-window .viewer-head {
   padding: 4px 8px;
-  border-top: 1px solid @hairline;
 }

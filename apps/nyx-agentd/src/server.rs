@@ -631,8 +631,9 @@ fn launch(d: &Arc<Daemon>, mut l: Launch) -> Result<Session, RpcError> {
         pid: None,
         created: now_ms(),
         ended: None,
-        cols: l.cols.clamp(2, 1000),
-        rows: l.rows.clamp(1, 500),
+        // A launch that names no size (0) starts at the usual 120×36 until a view attaches.
+        cols: if l.cols == 0 { 120 } else { l.cols.clamp(2, 1000) },
+        rows: if l.rows == 0 { 36 } else { l.rows.clamp(1, 500) },
         resumable: false,
         subagents: Vec::new(),
     };

@@ -109,59 +109,154 @@ pub fn parse_combo(combo: &str) -> Result<Combo, String> {
     Ok(Combo { mods, key: key.ok_or_else(|| format!("not a key combo: {combo}"))? })
 }
 
-/// An xkb keymap with one keycode per keysym: `syms[i]` is evdev code `i + 1`.
-pub fn keymap(syms: &[String]) -> String {
-    let mut s = String::from("xkb_keymap {\nxkb_keycodes \"nyx\" {\nminimum = 8;\n");
-    s.push_str(&format!("maximum = {};\n", syms.len() + 9));
-    for i in 0..syms.len() {
-        s.push_str(&format!("<K{}> = {};\n", i + 1, i + 9));
+/// Where a keysym sits on a US keyboard: its evdev code, and whether Shift is
+/// held for it. Programs that read physical keys (terminals, games) see real
+/// keys this way.
+pub fn us_key(sym: &str) -> Option<(u32, bool)> {
+    const LETTERS: &[u8; 26] = b"qwertyuiopasdfghjklzxcvbnm";
+    const LETTER_CODES: [u32; 26] =
+        [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 30, 31, 32, 33, 34, 35, 36, 37, 38, 44, 45, 46, 47, 48, 49, 50];
+    let named = match sym {
+        "Escape" => 1,
+        "BackSpace" => 14,
+        "Tab" => 15,
+        "Return" => 28,
+        "Control_L" => 29,
+        "Shift_L" => 42,
+        "Alt_L" => 56,
+        "space" => 57,
+        "Caps_Lock" => 58,
+        "KP_Enter" => 96,
+        "Print" => 99,
+        "Home" => 102,
+        "Up" => 103,
+        "Page_Up" => 104,
+        "Left" => 105,
+        "Right" => 106,
+        "End" => 107,
+        "Down" => 108,
+        "Page_Down" => 109,
+        "Insert" => 110,
+        "Delete" => 111,
+        "Super_L" => 125,
+        "Menu" => 127,
+        "F11" => 87,
+        "F12" => 88,
+        _ => 0,
+    };
+    if named != 0 {
+        return Some((named, false));
     }
-    s.push_str("};\nxkb_types \"nyx\" { include \"complete\" };\nxkb_compatibility \"nyx\" { include \"complete\" };\n");
-    s.push_str("xkb_symbols \"nyx\" {\n");
-    for (i, sym) in syms.iter().enumerate() {
-        s.push_str(&format!("key <K{}> {{[ {sym} ]}};\n", i + 1));
+    if let Some(n) = sym.strip_prefix('F').and_then(|n| n.parse::<u32>().ok())
+        && (1..=10).contains(&n)
+    {
+        return Some((58 + n, false));
     }
-    s.push_str("};\n};\n");
-    s
+    let c = match sym {
+        "plus" => '+',
+        "minus" => '-',
+        _ => {
+            let mut chars = sym.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) => c,
+                _ => sym.strip_prefix('U').and_then(|h| u32::from_str_radix(h, 16).ok()).and_then(char::from_u32)?,
+            }
+        }
+    };
+    if c.is_ascii_alphabetic() {
+        let i = LETTERS.iter().position(|l| *l == c.to_ascii_lowercase() as u8)?;
+        return Some((LETTER_CODES[i], c.is_ascii_uppercase()));
+    }
+    Some(match c {
+        '1'..='9' => (c as u32 - '1' as u32 + 2, false),
+        '0' => (11, false),
+        '!' => (2, true),
+        '@' => (3, true),
+        '#' => (4, true),
+        '$' => (5, true),
+        '%' => (6, true),
+        '^' => (7, true),
+        '&' => (8, true),
+        '*' => (9, true),
+        '(' => (10, true),
+        ')' => (11, true),
+        '-' => (12, false),
+        '_' => (12, true),
+        '=' => (13, false),
+        '+' => (13, true),
+        '[' => (26, false),
+        '{' => (26, true),
+        ']' => (27, false),
+        '}' => (27, true),
+        ';' => (39, false),
+        ':' => (39, true),
+        '\'' => (40, false),
+        '"' => (40, true),
+        '`' => (41, false),
+        '~' => (41, true),
+        '\\' => (43, false),
+        '|' => (43, true),
+        ',' => (51, false),
+        '<' => (51, true),
+        '.' => (52, false),
+        '>' => (52, true),
+        '/' => (53, false),
+        '?' => (53, true),
+        _ => return None,
+    })
 }
 
-/// The keysyms one keymap holds, added to as text needs new ones.
+/// The first evdev code for keysyms a US keyboard doesn't have, and how many there are.
+const EXTRA_FIRST: u32 = 200;
+pub const EXTRA_CODES: usize = 48;
+
+/// A US keymap, plus `extra` keysyms on spare keycodes (`extra[i]` is evdev
+/// code `EXTRA_FIRST + i`).
+pub fn keymap(extra: &[String]) -> String {
+    let mut codes = String::new();
+    let mut syms = String::new();
+    for (i, sym) in extra.iter().enumerate() {
+        codes.push_str(&format!("<NX{i:02}> = {};\n", EXTRA_FIRST as usize + i + 8));
+        syms.push_str(&format!("key <NX{i:02}> {{[ {sym} ]}};\n"));
+    }
+    format!(
+        "xkb_keymap {{\n\
+         xkb_keycodes \"nyx\" {{ include \"evdev+aliases(qwerty)\"\n{codes}}};\n\
+         xkb_types \"nyx\" {{ include \"complete\" }};\n\
+         xkb_compatibility \"nyx\" {{ include \"complete\" }};\n\
+         xkb_symbols \"nyx\" {{ include \"pc+us+inet(evdev)\"\n{syms}}};\n\
+         }};\n"
+    )
+}
+
+/// The keysyms on spare keycodes, added to as text needs new ones.
 #[derive(Default)]
 pub struct Layout {
     pub syms: Vec<String>,
 }
 
-/// More than this and the keymap is rebuilt from scratch.
-const MAX_SYMS: usize = 200;
-
 impl Layout {
-    /// Make sure every keysym in `need` has a keycode. True when the keymap
-    /// changed and has to be sent again.
+    /// Make sure every keysym in `need` has a spare keycode (at most
+    /// `EXTRA_CODES` at once). True when the keymap changed and has to be sent again.
     pub fn ensure(&mut self, need: &[String]) -> bool {
         let missing: Vec<&String> = need.iter().filter(|n| !self.syms.contains(n)).collect();
         if missing.is_empty() {
             return false;
         }
-        if self.syms.len() + missing.len() > MAX_SYMS {
+        if self.syms.len() + missing.len() > EXTRA_CODES {
             self.syms.clear();
-            for n in need {
-                if !self.syms.contains(n) {
-                    self.syms.push(n.clone());
-                }
-            }
-        } else {
-            for n in missing {
-                if !self.syms.contains(n) {
-                    self.syms.push(n.clone());
-                }
+        }
+        for n in need {
+            if !self.syms.contains(n) && self.syms.len() < EXTRA_CODES {
+                self.syms.push(n.clone());
             }
         }
         true
     }
 
-    /// The evdev code for a keysym already in the keymap.
+    /// The evdev code for a keysym on a spare keycode.
     pub fn code(&self, sym: &str) -> Option<u32> {
-        self.syms.iter().position(|s| s == sym).map(|i| i as u32 + 1)
+        self.syms.iter().position(|s| s == sym).map(|i| EXTRA_FIRST + i as u32)
     }
 }
 
@@ -195,26 +290,40 @@ mod tests {
     }
 
     #[test]
-    fn keymaps_list_each_keysym_once() {
-        let syms = vec!["a".to_string(), "Return".to_string()];
-        let k = keymap(&syms);
-        assert!(k.contains("maximum = 11;"), "{k}");
-        assert!(k.contains("<K1> = 9;") && k.contains("<K2> = 10;"), "{k}");
-        assert!(k.contains("key <K2> {[ Return ]};"), "{k}");
-        assert!(k.contains("include \"complete\""));
+    fn keys_sit_where_a_us_keyboard_has_them() {
+        assert_eq!(us_key("Return"), Some((28, false)));
+        assert_eq!(us_key("Escape"), Some((1, false)));
+        assert_eq!(us_key("a"), Some((30, false)));
+        assert_eq!(us_key("M"), Some((50, true)));
+        assert_eq!(us_key("l"), Some((38, false)));
+        assert_eq!(us_key("0"), Some((11, false)));
+        assert_eq!(us_key("U002D"), Some((12, false)));
+        assert_eq!(us_key("U003F"), Some((53, true)));
+        assert_eq!(us_key("plus"), Some((13, true)));
+        assert_eq!(us_key("F5"), Some((63, false)));
+        assert_eq!(us_key("F12"), Some((88, false)));
+        assert_eq!(us_key("U20AC"), None);
+    }
+
+    #[test]
+    fn keymaps_are_us_plus_extras() {
+        let k = keymap(&["U20AC".to_string()]);
+        assert!(k.contains("include \"pc+us+inet(evdev)\""), "{k}");
+        assert!(k.contains("include \"evdev+aliases(qwerty)\""), "{k}");
+        assert!(k.contains("<NX00> = 208;"), "{k}");
+        assert!(k.contains("key <NX00> {[ U20AC ]};"), "{k}");
+        assert!(!keymap(&[]).contains("<NX"));
     }
 
     #[test]
     fn layouts_grow_then_reset() {
         let mut l = Layout::default();
-        assert!(l.ensure(&["a".into(), "b".into()]));
-        assert!(!l.ensure(&["b".into()]));
-        assert_eq!(l.code("b"), Some(2));
-        assert!(l.ensure(&["c".into()]));
-        assert_eq!(l.code("c"), Some(3));
-        let many: Vec<String> = (0..MAX_SYMS).map(|i| format!("U{:04X}", 0x400 + i)).collect();
+        assert!(l.ensure(&["U20AC".into(), "U00E9".into()]));
+        assert!(!l.ensure(&["U00E9".into()]));
+        assert_eq!(l.code("U00E9"), Some(201));
+        let many: Vec<String> = (0..EXTRA_CODES).map(|i| format!("U{:04X}", 0x400 + i)).collect();
         assert!(l.ensure(&many));
-        assert_eq!(l.syms.len(), MAX_SYMS);
-        assert_eq!(l.code("a"), None);
+        assert_eq!(l.syms.len(), EXTRA_CODES);
+        assert_eq!(l.code("U20AC"), None);
     }
 }

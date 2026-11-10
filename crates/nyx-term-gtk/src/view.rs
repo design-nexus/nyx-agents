@@ -93,6 +93,8 @@ mod imp {
         pub(super) focused: Cell<bool>,
         pub(super) buttons: Cell<u32>,
         pub(super) selecting: Cell<bool>,
+        /// The button press under way goes to the program (Shift was held).
+        pub(super) passing: Cell<bool>,
         pub(super) scroll_rest: Cell<f64>,
         pub(super) im: RefCell<Option<gtk::IMMulticontext>>,
         pub(super) in_key: Cell<bool>,
@@ -389,6 +391,11 @@ impl TerminalView {
 
     fn relayout(&self, width: i32, height: i32) {
         let (cw, ch, pad) = self.cell_size();
+        // Before layout settles a view can be a sliver; telling the program it
+        // has one row or a few columns makes shells and TUIs misbehave.
+        if (width as f32) < 10.0 * cw + 2.0 * pad || (height as f32) < 2.0 * ch + 2.0 * pad {
+            return;
+        }
         let cols = (((width as f32 - 2.0 * pad) / cw).floor() as i32).max(2) as u16;
         let rows = (((height as f32 - 2.0 * pad) / ch).floor() as i32).max(1) as u16;
         if self.is_read_only() && !self.imp().fit.get() {
@@ -588,6 +595,15 @@ impl TerminalView {
         }
     }
 
+    pub fn has_selection(&self) -> bool {
+        self.with_state(|s| s.term.selection().is_some())
+    }
+
+    pub fn clear_selection(&self) {
+        self.with_state(|s| s.term.clear_selection());
+        self.queue_draw();
+    }
+
     pub fn select_all(&self) {
         self.with_state(|s| s.term.select_all());
         self.queue_draw();
@@ -692,21 +708,22 @@ impl TerminalView {
         });
         *self.imp().im.borrow_mut() = Some(im);
 
-        if !self.is_read_only() {
-            let keys = gtk::EventControllerKey::new();
-            let weak = self.downgrade();
-            keys.connect_key_pressed(move |c, keyval, keycode, state| {
-                let Some(view) = weak.upgrade() else { return glib::Propagation::Proceed };
-                view.key(c, keyval, keycode, state, KeyAction::Press)
-            });
-            let weak = self.downgrade();
-            keys.connect_key_released(move |c, keyval, keycode, state| {
-                if let Some(view) = weak.upgrade() {
-                    view.key(c, keyval, keycode, state, KeyAction::Release);
-                }
-            });
-            self.add_controller(keys);
-        }
+        let keys = gtk::EventControllerKey::new();
+        let weak = self.downgrade();
+        keys.connect_key_pressed(move |c, keyval, keycode, state| {
+            let Some(view) = weak.upgrade() else { return glib::Propagation::Proceed };
+            if view.is_read_only() {
+                return view.read_only_key(keyval, state);
+            }
+            view.key(c, keyval, keycode, state, KeyAction::Press)
+        });
+        let weak = self.downgrade();
+        keys.connect_key_released(move |c, keyval, keycode, state| {
+            if let Some(view) = weak.upgrade().filter(|v| !v.is_read_only()) {
+                view.key(c, keyval, keycode, state, KeyAction::Release);
+            }
+        });
+        self.add_controller(keys);
 
         let focus = gtk::EventControllerFocus::new();
         let weak = self.downgrade();
@@ -794,13 +811,25 @@ impl TerminalView {
     ) -> glib::Propagation {
         use gdk::ModifierType as M;
         let ctrl_shift = state.contains(M::CONTROL_MASK | M::SHIFT_MASK);
+        let ctrl_only = state.contains(M::CONTROL_MASK) && !state.intersects(M::SHIFT_MASK | M::ALT_MASK | M::SUPER_MASK);
         if action == KeyAction::Press {
             let lower = keyval.to_lower();
             if ctrl_shift && lower == gdk::Key::c {
                 self.copy_selection();
                 return glib::Propagation::Stop;
             }
+            // Ctrl+C copies while text is selected; with nothing selected it interrupts as usual.
+            if ctrl_only && lower == gdk::Key::c && self.copy_selection() {
+                self.clear_selection();
+                return glib::Propagation::Stop;
+            }
             if (ctrl_shift && lower == gdk::Key::v) || (state.contains(M::SHIFT_MASK) && keyval == gdk::Key::Insert) {
+                self.paste_clipboard();
+                return glib::Propagation::Stop;
+            }
+            // Ctrl+V pastes text. With only an image on the clipboard the key goes
+            // through, so programs that read images themselves (Claude Code) get it.
+            if ctrl_only && lower == gdk::Key::v && has_text(&self.clipboard().formats()) {
                 self.paste_clipboard();
                 return glib::Propagation::Stop;
             }
@@ -899,6 +928,22 @@ impl TerminalView {
         glib::Propagation::Stop
     }
 
+    /// Keys a view that only shows a screen still answers: copy and select all.
+    fn read_only_key(&self, keyval: gdk::Key, state: gdk::ModifierType) -> glib::Propagation {
+        use gdk::ModifierType as M;
+        if !state.contains(M::CONTROL_MASK) {
+            return glib::Propagation::Proceed;
+        }
+        match keyval.to_lower() {
+            gdk::Key::c if self.copy_selection() => glib::Propagation::Stop,
+            gdk::Key::a if state.contains(M::SHIFT_MASK) => {
+                self.select_all();
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        }
+    }
+
     fn mouse_mods(state: gdk::ModifierType) -> Mods {
         use gdk::ModifierType as M;
         let mut m = 0;
@@ -915,7 +960,7 @@ impl TerminalView {
     }
 
     fn report_mouse(&self, action: MouseAction, button: MouseButton, state: gdk::ModifierType, x: f64, y: f64) -> bool {
-        if self.is_read_only() || state.contains(gdk::ModifierType::SHIFT_MASK) {
+        if self.is_read_only() {
             return false;
         }
         let (cw, ch, pad) = self.cell_size();
@@ -957,11 +1002,13 @@ impl TerminalView {
     fn pointer_press(&self, g: &gtk::GestureClick, _n: i32, x: f64, y: f64) {
         let button = g.current_button();
         let state = g.current_event_state();
-        if !self.is_read_only() {
-            self.grab_focus();
-        }
+        self.grab_focus();
         self.imp().buttons.set(self.imp().buttons.get() | (1 << button));
-        if self.report_mouse(MouseAction::Press, Self::gdk_button(button), state, x, y) {
+        // Clicks and drags select text, even in programs that ask for the
+        // mouse; Shift sends them to the program instead.
+        let pass = state.contains(gdk::ModifierType::SHIFT_MASK);
+        self.imp().passing.set(pass);
+        if pass && self.report_mouse(MouseAction::Press, Self::gdk_button(button), state, x, y) {
             return;
         }
         let (col, row) = self.cell_at(x, y);
@@ -982,7 +1029,7 @@ impl TerminalView {
         let button = g.current_button();
         let state = g.current_event_state();
         self.imp().buttons.set(self.imp().buttons.get() & !(1 << button));
-        if self.report_mouse(MouseAction::Release, Self::gdk_button(button), state, x, y) {
+        if self.imp().passing.replace(false) && self.report_mouse(MouseAction::Release, Self::gdk_button(button), state, x, y) {
             return;
         }
         if button == 1 && self.imp().selecting.replace(false) {
@@ -1000,7 +1047,8 @@ impl TerminalView {
 
     fn pointer_motion(&self, state: gdk::ModifierType, x: f64, y: f64) {
         let held = self.imp().buttons.get();
-        if held != 0 || self.with_state(|s| s.term.mouse_tracking()) {
+        // Hover goes to programs that track the mouse; drags only when the press did.
+        if (held == 0 || self.imp().passing.get()) && self.with_state(|s| s.term.mouse_tracking()) {
             let button =
                 [1u32, 2, 3].into_iter().find(|b| held & (1 << b) != 0).map(Self::gdk_button).unwrap_or(MouseButton::None);
             if self.report_mouse(MouseAction::Motion, button, state, x, y) {
@@ -1057,4 +1105,10 @@ impl TerminalView {
         let window = self.root().and_downcast::<gtk::Window>();
         gtk::UriLauncher::new(&uri).launch(window.as_ref(), gtk::gio::Cancellable::NONE, |_| {});
     }
+}
+
+/// The clipboard holds text: as a local string, or offered by another program.
+fn has_text(f: &gdk::ContentFormats) -> bool {
+    f.contains_type(glib::Type::STRING)
+        || ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING", "TEXT"].iter().any(|m| f.contain_mime_type(m))
 }

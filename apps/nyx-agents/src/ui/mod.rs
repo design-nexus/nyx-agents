@@ -4,6 +4,7 @@ mod daemon;
 mod inspector;
 mod page;
 mod prefs;
+mod settings;
 mod theme;
 mod window;
 mod workspace;

@@ -9,9 +9,9 @@ use glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use nyx_agents_proto::{Activity, Event, Harness, Launch, Lifecycle, Session};
-use nyx_ui::chrome;
 use nyx_ui::sidebar::Sidebar;
 use nyx_ui::tabs::{Tab, TabRow};
+use nyx_ui::{chrome, menu};
 
 use super::daemon::{self, Msg};
 use super::page::{self, Actions, Page};
@@ -25,8 +25,9 @@ struct Ui {
     stack: gtk::Stack,
     new_button: gtk::MenuButton,
     new_list: gtk::ListBox,
-    folder_button: gtk::Button,
+    folder_label: gtk::Label,
     worktree_check: gtk::CheckButton,
+    workspace_check: gtk::CheckButton,
     folder: RefCell<String>,
     pages: RefCell<Vec<Rc<RefCell<Page>>>>,
     active: Cell<usize>,
@@ -99,6 +100,125 @@ pub fn open_target(target: &str) {
     }
 }
 
+fn open_settings() {
+    if let Some(ui) = cur() {
+        let harnesses = ui.harnesses.borrow().clone();
+        super::settings::open(&ui.overlay, &ui.window, &harnesses);
+    }
+}
+
+fn copy_text(text: &str) {
+    if let Some(d) = gdk::Display::default() {
+        d.clipboard().set_text(text);
+        toast("Copied");
+    }
+}
+
+fn open_git_at(root: &str) {
+    if let Err(e) = std::process::Command::new("nyx-git").arg(root).spawn() {
+        toast(&format!("Could not open Nyx Git: {e}"));
+    }
+}
+
+/// The tab under a point in the tab row.
+fn tab_at(row: &gtk::Widget, x: f64, y: f64) -> Option<usize> {
+    let mut w = row.pick(x, y, gtk::PickFlags::DEFAULT)?;
+    while !w.has_css_class("tab") {
+        w = w.parent()?;
+        if w == *row {
+            return None;
+        }
+    }
+    let mut i = 0;
+    let mut c = w.prev_sibling();
+    while let Some(p) = c {
+        i += 1;
+        c = p.prev_sibling();
+    }
+    Some(i)
+}
+
+/// What can be done with a session, for its right-click menus.
+fn session_entries(id: &str) -> Vec<menu::Entry> {
+    let Some(ui) = cur() else { return Vec::new() };
+    let Some(s) = ui.sessions.borrow().get(id).cloned() else { return Vec::new() };
+    let live = matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting);
+    let (page, host) = {
+        let pages = ui.pages.borrow();
+        let page = pages.iter().find(|p| p.borrow().id == id).cloned();
+        let host = pages
+            .iter()
+            .find(|p| p.borrow().split.as_ref().is_some_and(|(o, _)| o.borrow().id == id))
+            .map(|p| p.borrow().id.clone());
+        (page, host)
+    };
+    let id = id.to_string();
+    let mut e = Vec::new();
+    if let Some(host) = host {
+        e.push(menu::item("Close this split", move || unsplit(&host)).icon("window-close-symbolic"));
+    } else if live && page.as_ref().is_none_or(|p| p.borrow().split.is_none()) {
+        let (a, b) = (id.clone(), id.clone());
+        e.push(
+            menu::item("Open a terminal beside", move || {
+                open_session(&a);
+                split(&a, false);
+            })
+            .icon("view-dual-symbolic")
+            .key("Ctrl+Shift+O"),
+        );
+        e.push(
+            menu::item("Open a terminal below", move || {
+                open_session(&b);
+                split(&b, true);
+            })
+            .icon("view-paged-symbolic")
+            .key("Ctrl+Shift+E"),
+        );
+    }
+    if let Some(p) = page {
+        e.push(menu::item("Find…", move || p.borrow().open_find()).icon("system-search-symbolic").key("Ctrl+F"));
+    }
+    if let Some(w) = s.workspace.clone() {
+        e.push(menu::item("Show the agent's workspace", move || show_workspace(&w)).icon("video-display-symbolic"));
+    }
+    if let Some(root) = s.worktree.as_ref().map(|w| w.root.clone()) {
+        e.push(menu::item("Open in Nyx Git", move || open_git_at(&root)).icon("nyx-agents-branch-symbolic"));
+    }
+    let (rid, title, cwd) = (id.clone(), s.title.clone(), s.cwd.clone());
+    e.push(
+        menu::item("Rename…", move || {
+            let id = rid.clone();
+            nyx_ui::widgets::ask_text("Rename session", "", &title, "Rename", move |t| {
+                let id = id.clone();
+                daemon::request(
+                    move |c| c.call::<Session>(nyx_agents_proto::Call::Rename { id, title: t }),
+                    |r| {
+                        if let Err(e) = r {
+                            toast(&e);
+                        }
+                    },
+                );
+            });
+        })
+        .icon("document-edit-symbolic"),
+    );
+    e.push(menu::item("Copy folder path", move || copy_text(&cwd)).icon("folder-symbolic"));
+    e.push(menu::separator());
+    let a = ui.actions.clone();
+    if live {
+        let (a, id) = (a.clone(), id.clone());
+        let label = if s.harness == "shell" { "Close the terminal" } else { "Stop the agent" };
+        e.push(menu::item(label, move || (a.stop)(&id)).icon("media-playback-stop-symbolic").danger());
+    } else {
+        if s.resumable {
+            let (a, id) = (a.clone(), id.clone());
+            e.push(menu::item("Resume", move || (a.resume)(&id)).icon("media-playback-start-symbolic"));
+        }
+        e.push(menu::item("Forget", move || (a.forget)(&id)).icon("user-trash-symbolic").danger());
+    }
+    e
+}
+
 fn show_workspace(id: &str) {
     let parent = cur().map(|ui| ui.window.clone().upcast::<gtk::Window>());
     super::workspace::open(id, parent, toast);
@@ -166,6 +286,7 @@ fn actions() -> Rc<Actions> {
         subagent_source: Rc::new(|harness| {
             cur().and_then(|ui| ui.harnesses.borrow().iter().find(|h| h.id == harness).and_then(|h| h.capabilities.subagents))
         }),
+        session_menu: Rc::new(session_entries),
     })
 }
 
@@ -175,7 +296,7 @@ fn build(app: &gtk::Application) {
     window.add_css_class("agents-window");
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
     window.set_icon_name(Some("io.github.design_nexus.nyx.Agents"));
-    nyx_ui::keys::install(&window, nyx_ui::keys::Common { close: false, ..Default::default() });
+    nyx_ui::keys::install(&window, nyx_ui::keys::Common { close: false, settings: Some(open_settings), ..Default::default() });
 
     let sidebar = Sidebar::new();
     sidebar.follow_window(&window);
@@ -198,6 +319,14 @@ fn build(app: &gtk::Application) {
     tab_row.connect_select(select_tab);
     tab_row.connect_close(close_tab);
     tab_row.connect_reorder(reorder);
+    menu::on_right_click(&tab_row.root, |w, x, y| {
+        let Some(i) = tab_at(w, x, y) else { return };
+        let Some(id) = cur().and_then(|ui| ui.pages.borrow().get(i).map(|p| p.borrow().id.clone())) else { return };
+        let mut entries = vec![menu::item("Close tab", move || close_tab(i)).icon("window-close-symbolic")];
+        entries.push(menu::separator());
+        entries.extend(session_entries(&id));
+        menu::popup_at(w, x, y, entries);
+    });
 
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
     column.set_hexpand(true);
@@ -219,8 +348,9 @@ fn build(app: &gtk::Application) {
     }
     header.start.append(&collapse);
 
-    let (new_button, new_list, folder_button, worktree_check) = new_session_menu();
+    let (new_button, new_list, folder_label, worktree_check, workspace_check) = new_session_menu();
     header.end.append(&new_button);
+    header.end.append(&chrome::settings_button(open_settings));
     {
         let nb = new_button.clone();
         tab_row.connect_new(move || nb.popup());
@@ -242,7 +372,7 @@ fn build(app: &gtk::Application) {
             nyx_core::paths::home().display().to_string()
         }
     };
-    folder_button.set_label(&nyx_core::paths::pretty(std::path::Path::new(&folder)));
+    folder_label.set_label(&nyx_core::paths::pretty(std::path::Path::new(&folder)));
     worktree_check.set_sensitive(nyx_agents_core::git::context(std::path::Path::new(&folder)).is_some());
     let ui = Rc::new(Ui {
         window: window.clone(),
@@ -252,8 +382,9 @@ fn build(app: &gtk::Application) {
         stack,
         new_button,
         new_list,
-        folder_button,
+        folder_label,
         worktree_check,
+        workspace_check,
         folder: RefCell::new(folder),
         pages: RefCell::new(Vec::new()),
         active: Cell::new(0),
@@ -276,6 +407,11 @@ fn build(app: &gtk::Application) {
         }
     });
     window.connect_is_active_notify(|_| report_viewing());
+    window.connect_default_width_notify(|w| {
+        if nyx_ui::settings_card::is_open() {
+            nyx_ui::settings_card::fit(w);
+        }
+    });
     window.connect_close_request(|_| {
         save_tabs();
         prefs::flush();
@@ -295,6 +431,7 @@ fn install_keys(window: &gtk::ApplicationWindow) {
         let Some(ui) = cur() else { return glib::Propagation::Proceed };
         let active = ui.pages.borrow().get(ui.active.get()).cloned();
         match key.to_lower() {
+            gdk::Key::Escape if nyx_ui::settings_card::is_open() => nyx_ui::settings_card::escape(),
             gdk::Key::t if ctrl && !shift => ui.new_button.popup(),
             gdk::Key::f if ctrl && !shift => {
                 if let Some(p) = active {
@@ -420,7 +557,10 @@ fn refresh_sidebar() {
     let sb = &ui.sidebar;
     sb.clear();
     let active_id = ui.pages.borrow().get(ui.active.get()).map(|p| p.borrow().id.clone());
-    let mut list: Vec<Session> = ui.sessions.borrow().values().filter(|s| s.harness != "shell").cloned().collect();
+    // Terminals opened beside an agent belong to its tab; every other session is listed.
+    let splits: std::collections::HashSet<String> =
+        ui.pages.borrow().iter().filter_map(|p| p.borrow().split.as_ref().map(|(o, _)| o.borrow().id.clone())).collect();
+    let mut list: Vec<Session> = ui.sessions.borrow().values().filter(|s| !splits.contains(&s.id)).cloned().collect();
     list.sort_by_key(rank);
     let live: Vec<&Session> = list.iter().filter(|s| matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting)).collect();
     let needs: Vec<&&Session> = live.iter().filter(|s| s.status.activity == Activity::Blocked).collect();
@@ -438,6 +578,14 @@ fn refresh_sidebar() {
             item.set_active(active_id.as_deref() == Some(s.id.as_str()));
             let id = s.id.clone();
             item.button.connect_clicked(move |_| open_session(&id));
+            let id = s.id.clone();
+            menu::on_right_click(&item.button, move |w, x, y| {
+                let open = id.clone();
+                let mut entries = vec![menu::item("Open", move || open_session(&open)).icon("go-next-symbolic")];
+                entries.push(menu::separator());
+                entries.extend(session_entries(&id));
+                menu::popup_at(w, x, y, entries);
+            });
             sb.append(&item.button);
         }
     };
@@ -470,11 +618,27 @@ fn refresh_sidebar() {
                 &name,
                 &format!("New session in {}", nyx_core::paths::pretty(std::path::Path::new(&root))),
             );
+            let r = root.clone();
             item.button.connect_clicked(move |_| {
-                set_folder(&root);
+                set_folder(&r);
                 if let Some(ui) = cur() {
                     ui.new_button.popup();
                 }
+            });
+            menu::on_right_click(&item.button, move |w, x, y| {
+                let (a, b, c) = (root.clone(), root.clone(), root.clone());
+                let entries = vec![
+                    menu::item("New session here…", move || {
+                        set_folder(&a);
+                        if let Some(ui) = cur() {
+                            ui.new_button.popup();
+                        }
+                    })
+                    .icon("list-add-symbolic"),
+                    menu::item("Open in Nyx Git", move || open_git_at(&b)).icon("nyx-agents-branch-symbolic"),
+                    menu::item("Copy path", move || copy_text(&c)).icon("edit-copy-symbolic"),
+                ];
+                menu::popup_at(w, x, y, entries);
             });
             sb.append(&item.button);
         }
@@ -511,6 +675,8 @@ fn refresh_tabs() {
     drop(sessions);
     let n = tabs.len();
     ui.tab_row.set_tabs(&tabs, ui.active.get().min(n.saturating_sub(1)));
+    // With nothing open the empty page offers New session; a lone `+` would float under the header.
+    ui.tab_row.root.set_visible(n > 0);
     if n == 0 {
         ui.stack.set_visible_child_name("empty");
         chrome::set_title(&ui.window, "Agents", "");
@@ -695,7 +861,7 @@ fn unsplit(id: &str) {
 fn set_folder(path: &str) {
     let Some(ui) = cur() else { return };
     *ui.folder.borrow_mut() = path.to_string();
-    ui.folder_button.set_label(&nyx_core::paths::pretty(std::path::Path::new(path)));
+    ui.folder_label.set_label(&nyx_core::paths::pretty(std::path::Path::new(path)));
     let in_repo = nyx_agents_core::git::context(std::path::Path::new(path)).is_some();
     ui.worktree_check.set_sensitive(in_repo);
     if !in_repo {
@@ -704,12 +870,23 @@ fn set_folder(path: &str) {
 }
 
 /// The New session menu: a folder, and the installed harnesses to start there.
-fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Button, gtk::CheckButton) {
+fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Label, gtk::CheckButton, gtk::CheckButton) {
     let list = gtk::ListBox::new();
     list.add_css_class("new-session-list");
     list.set_selection_mode(gtk::SelectionMode::None);
     list.set_activate_on_single_click(true);
-    let folder = gtk::Button::with_label("~");
+    let folder_label = gtk::Label::new(Some("~"));
+    folder_label.set_xalign(0.0);
+    folder_label.set_hexpand(true);
+    folder_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    let folder_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    folder_box.append(&gtk::Image::from_icon_name("folder-symbolic"));
+    folder_box.append(&folder_label);
+    folder_box.append(&gtk::Image::from_icon_name("go-next-symbolic"));
+    let folder = gtk::Button::new();
+    folder.add_css_class("flat");
+    folder.add_css_class("new-session-folder");
+    folder.set_child(Some(&folder_box));
     folder.set_tooltip_text(Some("Choose the folder the agent starts in"));
     folder.connect_clicked(|_| {
         let Some(ui) = cur() else { return };
@@ -727,32 +904,51 @@ fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Button, gtk::Check
             }
         });
     });
-    let heading = gtk::Label::new(Some("Start in"));
-    heading.add_css_class("dim-label");
-    heading.set_xalign(0.0);
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    content.set_margin_top(8);
-    content.set_margin_bottom(8);
-    content.set_margin_start(8);
-    content.set_margin_end(8);
+    let heading = |text: &str| {
+        let l = gtk::Label::new(Some(text));
+        l.add_css_class("menu-heading");
+        l.set_xalign(0.0);
+        l
+    };
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    content.add_css_class("new-session-menu");
     let worktree = gtk::CheckButton::with_label("In a new worktree");
     worktree.set_tooltip_text(Some("Start on a new branch in its own git worktree, so agents can work in parallel"));
-    content.append(&heading);
+    let workspace = gtk::CheckButton::with_label("With a desktop of its own");
+    workspace.set_tooltip_text(Some(
+        "Start an agent workspace: a separate desktop where the agent opens and drives programs. You can watch it and take over. Claude Code and Codex get the tools for it.",
+    ));
+    content.append(&heading("Start in"));
     content.append(&folder);
     content.append(&worktree);
+    content.append(&workspace);
+    content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+    content.append(&heading("Agent"));
     content.append(&list);
     let popover = gtk::Popover::new();
+    popover.set_has_arrow(false);
+    popover.add_css_class("menu-popover");
     popover.set_child(Some(&content));
     let button = gtk::MenuButton::new();
     button.set_icon_name("list-add-symbolic");
     button.set_tooltip_text(Some("New session (Ctrl+T)"));
-    button.add_css_class("suggested-action");
+    button.add_css_class("bar-button");
+    button.set_valign(gtk::Align::Center);
     button.set_popover(Some(&popover));
     list.connect_row_activated(|_, row| {
         let id = row.widget_name().to_string();
         launch(&id);
     });
-    (button, list, folder, worktree)
+    (button, list, folder_label, worktree, workspace)
+}
+
+/// The version number in a harness's `--version` line ("codex-cli 0.167.0" is "0.167.0").
+fn short_version(v: &str) -> String {
+    v.split(|c: char| c.is_whitespace() || c == '/')
+        .map(|t| t.trim_start_matches('v').trim_matches(|c: char| c == '(' || c == ')' || c == ','))
+        .find(|t| t.starts_with(|c: char| c.is_ascii_digit()))
+        .unwrap_or(v)
+        .to_string()
 }
 
 fn fill_new_menu() {
@@ -772,7 +968,7 @@ fn fill_new_menu() {
         name.set_hexpand(true);
         b.append(&name);
         if let Some(v) = &h.version {
-            let v = gtk::Label::new(Some(v));
+            let v = gtk::Label::new(Some(&short_version(v)));
             v.add_css_class("harness-version");
             v.set_ellipsize(gtk::pango::EllipsizeMode::End);
             v.set_max_width_chars(24);
@@ -801,6 +997,8 @@ fn launch(harness: &str) {
     let cwd = ui.folder.borrow().clone();
     let worktree = ui.worktree_check.is_active().then(String::new);
     ui.worktree_check.set_active(false);
+    let workspace = (ui.workspace_check.is_active() && harness != "shell").then(|| "new".to_string());
+    ui.workspace_check.set_active(false);
     let harness = harness.to_string();
     prefs::update(|p| {
         p.last_folder = cwd.clone();
@@ -809,7 +1007,7 @@ fn launch(harness: &str) {
         }
     });
     daemon::request(
-        move |c| c.launch(Launch { harness, cwd, worktree, ..Default::default() }),
+        move |c| c.launch(Launch { harness, cwd, worktree, workspace, ..Default::default() }),
         |r| match r {
             Ok(s) => {
                 let Some(ui) = cur() else { return };

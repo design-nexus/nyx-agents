@@ -6,7 +6,24 @@ use nyx_term_gtk::ViewStyle;
 
 use super::prefs;
 
+/// A git branch, as a filled symbolic icon (GTK fills every path of one).
+const BRANCH_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="#000" fill-rule="evenodd"><path d="M7 2.2a2.8 2.8 0 1 1 0 5.6a2.8 2.8 0 1 1 0-5.6zm0 1.5a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6z"/><path d="M7 16.2a2.8 2.8 0 1 1 0 5.6a2.8 2.8 0 1 1 0-5.6zm0 1.5a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6z"/><path d="M17 4.2a2.8 2.8 0 1 1 0 5.6a2.8 2.8 0 1 1 0-5.6zm0 1.5a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6z"/><path d="M6.2 7.6h1.6v8.8H6.2z"/><path d="M16.2 9.6h1.6v1.2c0 2.4-1.8 4.2-4.2 4.2h-3.2c-1.3 0-2.6.9-2.6 2.2H6.2c0-2.2 1.9-3.8 4.2-3.8h3.2c1.5 0 2.6-1.1 2.6-2.6z"/></g></svg>"##;
+
+/// Icons the app brings, written once to its cache and added to the icon theme.
+fn install_icons() {
+    let dir = nyx_core::paths::cache_dir().join("icons");
+    let file = dir.join("nyx-agents-branch-symbolic.svg");
+    if std::fs::read_to_string(&file).ok().as_deref() != Some(BRANCH_ICON) {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(&file, BRANCH_ICON);
+    }
+    if let Some(display) = gdk::Display::default() {
+        gtk::IconTheme::for_display(&display).add_search_path(&dir);
+    }
+}
+
 pub fn install() {
+    install_icons();
     nyx_theme::use_design_2();
     nyx_theme::install(nyx_theme::Style {
         window_class: "agents-window",

@@ -133,6 +133,28 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
         });
     }
     controllers(&picture, input, texture_size, logical);
+    {
+        let (take, win, id) = (take.clone(), window.clone(), w.id.clone());
+        nyx_ui::menu::on_right_click(&picture, move |pw, x, y| {
+            // While you drive, right-clicks belong to the workspace.
+            if take.is_active() {
+                return;
+            }
+            let (t, wn, id) = (take.clone(), win.clone(), id.clone());
+            let entries = vec![
+                nyx_ui::menu::check("Take over", false, move |on| t.set_active(on)),
+                nyx_ui::menu::separator(),
+                nyx_ui::menu::item("Close the view", move || wn.close()).icon("window-close-symbolic"),
+                nyx_ui::menu::item("End this workspace", move || {
+                    let id = id.clone();
+                    daemon::request(move |c| c.call::<serde_json::Value>(Call::RemoveWorkspace { id }), |_| {});
+                })
+                .icon("user-trash-symbolic")
+                .danger(),
+            ];
+            nyx_ui::menu::popup_at(pw, x, y, entries);
+        });
+    }
 
     let id = w.id.clone();
     window.connect_close_request(move |_| {

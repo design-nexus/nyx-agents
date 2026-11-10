@@ -88,9 +88,7 @@ impl Input {
             pos: (width / 2, height / 2),
             start: Instant::now(),
         };
-        // A keyboard without a keymap is ignored; start with the usual keys.
-        let base: Vec<String> = ["Return", "Escape", "Tab", "BackSpace", "space"].iter().map(|s| s.to_string()).collect();
-        input.layout.ensure(&base);
+        // A keyboard without a keymap is ignored.
         input.send_keymap()?;
         Ok(input)
     }
@@ -181,14 +179,24 @@ impl Input {
     }
 
     fn ensure(&mut self, syms: &[String]) -> Result<(), String> {
-        if self.layout.ensure(syms) {
+        let extra: Vec<String> = syms.iter().filter(|s| keys::us_key(s).is_none()).cloned().collect();
+        if !extra.is_empty() && self.layout.ensure(&extra) {
             self.send_keymap()?;
         }
         Ok(())
     }
 
+    /// The key for a keysym and the modifiers it needs: a US key, or a spare
+    /// keycode (which must have been given it with `ensure`).
+    fn locate(&self, sym: &str, mods: u32) -> Result<(u32, u32), String> {
+        if let Some((code, shift)) = keys::us_key(sym) {
+            return Ok((code, if shift { mods | keys::SHIFT } else { mods }));
+        }
+        self.layout.code(sym).map(|c| (c, mods)).ok_or_else(|| format!("no keycode for {sym}"))
+    }
+
     fn tap(&mut self, sym: &str, mods: u32) -> Result<(), String> {
-        let code = self.layout.code(sym).ok_or_else(|| format!("no keycode for {sym}"))?;
+        let (code, mods) = self.locate(sym, mods)?;
         if mods != 0 {
             self.keyboard.modifiers(mods, 0, 0, 0);
         }
@@ -211,7 +219,7 @@ impl Input {
     /// Type text as key presses, whatever the characters.
     pub fn type_text(&mut self, text: &str) -> Result<(), String> {
         let syms: Vec<String> = text.chars().filter_map(keys::char_keysym).collect();
-        for chunk in syms.chunks(100) {
+        for chunk in syms.chunks(keys::EXTRA_CODES) {
             self.ensure(chunk)?;
             for s in chunk {
                 self.tap(s, 0)?;
