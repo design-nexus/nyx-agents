@@ -1,0 +1,24 @@
+{
+  "bench": "latency",
+  "children_cpu_s": 0.0,
+  "cpu_sys_s": 0.347,
+  "cpu_user_s": 0.218,
+  "key_to_echo": {
+    "max_ms": 0.713,
+    "n": 200,
+    "p50_ms": 0.157,
+    "p95_ms": 0.301,
+    "p99_ms": 0.38
+  },
+  "key_to_frame": {
+    "max_ms": 5.131,
+    "n": 200,
+    "p50_ms": 2.322,
+    "p95_ms": 3.501,
+    "p99_ms": 3.955
+  },
+  "libghostty_vt": "1.0.0",
+  "peak_rss_mb": 148,
+  "rss_mb": 148,
+  "under_load": false
+}

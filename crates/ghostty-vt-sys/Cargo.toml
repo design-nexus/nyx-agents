@@ -1,0 +1,14 @@
+[package]
+name = "ghostty-vt-sys"
+description = "Raw bindings to libghostty-vt 1.0, built statically from the pinned release"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+links = "ghostty-vt"
+build = "build.rs"
+
+[build-dependencies]
+bindgen = "0.72"
+sha2 = "0.10"

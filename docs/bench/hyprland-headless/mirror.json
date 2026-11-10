@@ -1,0 +1,45 @@
+{
+  "avg_draw_ms": 1.121,
+  "bench": "mirror",
+  "bytes_fed": 105753608,
+  "children_cpu_s": 0.495,
+  "cpu_sys_s": 0.398,
+  "cpu_user_s": 0.75,
+  "frames": 39,
+  "gpu_render": {
+    "max_ms": 120.985,
+    "n": 26,
+    "p50_ms": 2.771,
+    "p95_ms": 8.058,
+    "p99_ms": 120.985
+  },
+  "grid": [
+    140,
+    26
+  ],
+  "libghostty_vt": "1.0.0",
+  "max_draw_ms": 7.002,
+  "mb_per_s": 139.196,
+  "mirror": {
+    "avg_draw_ms": 0.787,
+    "bytes_fed": 105753608,
+    "frames": 40,
+    "max_draw_ms": 1.313,
+    "parse_ms": 269.821,
+    "rows_built": 752
+  },
+  "parse_ms": 278.054,
+  "peak_rss_mb": 174,
+  "rows_built": 728,
+  "rss_mb": 174,
+  "seconds": 0.718,
+  "snapshot": {
+    "max_ms": 8.242,
+    "n": 26,
+    "p50_ms": 2.512,
+    "p95_ms": 2.682,
+    "p99_ms": 8.242
+  },
+  "terminal_memory_mb": 0.0,
+  "workload_mb": 100.0
+}

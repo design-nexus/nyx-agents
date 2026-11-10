@@ -1,0 +1,24 @@
+{
+  "avg_draw_ms": 1.342,
+  "bench": "scrollback",
+  "bytes_fed": 5242935,
+  "children_cpu_s": 0.0,
+  "cpu_sys_s": 0.692,
+  "cpu_user_s": 8.04,
+  "frames": 761,
+  "libghostty_vt": "1.0.0",
+  "max_draw_ms": 7.142,
+  "page_flips": 400,
+  "page_to_frame": {
+    "max_ms": 7.062,
+    "n": 400,
+    "p50_ms": 4.04,
+    "p95_ms": 5.641,
+    "p99_ms": 6.307
+  },
+  "parse_ms": 14.584,
+  "peak_rss_mb": 244,
+  "rows_built": 16632,
+  "rss_mb": 240,
+  "scrollback_rows": 8283
+}

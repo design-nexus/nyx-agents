@@ -1,0 +1,23 @@
+[package]
+name = "term-lab"
+description = "Prototype and benchmark for the Nyx Agents terminal: a shell window, a read-only mirror, and timed workloads"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "nyx-term-lab"
+path = "src/main.rs"
+
+[dependencies]
+nyx-term.workspace = true
+nyx-term-gtk.workspace = true
+gsk = { package = "gsk4", version = "0.11", features = ["vulkan"] }
+nyx-pty.workspace = true
+gtk.workspace = true
+libc.workspace = true
+serde_json.workspace = true
+async-channel = "2"

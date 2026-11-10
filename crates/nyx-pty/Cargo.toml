@@ -1,0 +1,11 @@
+[package]
+name = "nyx-pty"
+description = "Pseudo-terminals: spawn a program on a fresh pty and own its master side"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+libc.workspace = true

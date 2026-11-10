@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/ghostty-vt-sys", "crates/nyx-term", "crates/nyx-pty", "crates/nyx-term-gtk", "apps/term-lab"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Ken Smith"]
+repository = "https://github.com/design-nexus/nyx-agents"
+
+[workspace.dependencies]
+ghostty-vt-sys = { path = "crates/ghostty-vt-sys" }
+nyx-term = { path = "crates/nyx-term" }
+nyx-term-gtk = { path = "crates/nyx-term-gtk" }
+nyx-pty = { path = "crates/nyx-pty" }
+anyhow = "1"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+libc = "0.2"
+rustix = { version = "1", features = ["pty", "process", "termios", "fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+# The terminal parser runs in every frame; keep it fast in debug builds too.
+[profile.dev.package.nyx-term]
+opt-level = 2

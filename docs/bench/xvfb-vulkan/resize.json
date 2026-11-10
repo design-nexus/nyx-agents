@@ -1,0 +1,24 @@
+{
+  "avg_draw_ms": 0.619,
+  "bench": "resize",
+  "bytes_fed": 5287736,
+  "children_cpu_s": 0.0,
+  "cpu_sys_s": 0.384,
+  "cpu_user_s": 1.252,
+  "frames": 166,
+  "grids_seen": 60,
+  "libghostty_vt": "1.0.0",
+  "max_draw_ms": 6.227,
+  "parse_ms": 19.47,
+  "peak_rss_mb": 240,
+  "resize_to_frame": {
+    "max_ms": 7.105,
+    "n": 60,
+    "p50_ms": 5.019,
+    "p95_ms": 6.561,
+    "p99_ms": 6.921
+  },
+  "resizes": 60,
+  "rows_built": 2046,
+  "rss_mb": 240
+}
