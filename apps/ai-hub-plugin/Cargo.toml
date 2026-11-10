@@ -1,0 +1,19 @@
+[package]
+name = "nyx-ai-hub-plugin"
+description = "AI Hub: a Nyx Bar and Control Center plugin over Nyx Agents and Nyx AI Core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+nyx-agents-proto = { path = "../../crates/nyx-agents-proto" }
+nyx-agents-client = { path = "../../crates/nyx-agents-client" }
+nyx-plugin-sdk = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+nyx-plugin = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }

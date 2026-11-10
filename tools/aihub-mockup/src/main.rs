@@ -2,6 +2,9 @@
 //! renderer (nyx-plugin-view), theme and stylesheet. MOCK_TAB picks which
 //! popover view (views/<tab>.json) is open.
 
+mod live;
+
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -118,6 +121,12 @@ fn popover_value(view: &str, header: bool) -> serde_json::Value {
 }
 
 fn popover(view: &str) -> Node {
+    // A view saved from the real plugin, drawn as it is.
+    if view == "file" {
+        let path = std::env::var("MOCK_FILE").expect("MOCK_FILE");
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        return node(v.get("view").cloned().unwrap_or(v), view);
+    }
     node(popover_value(view, true), view)
 }
 
@@ -135,29 +144,53 @@ fn inner_scroll(w: &gtk::Widget) -> Option<gtk::ScrolledWindow> {
     None
 }
 
-/// Scrolls the page under the header and tabs to MOCK_SCROLL (0-1) once it has its size.
+/// Scrolls the page under the header and tabs to MOCK_SCROLL (0-1) once it has its
+/// size (and, live, once the plugin has drawn it).
 fn scroll_to(outer: &gtk::ScrolledWindow) {
     let Some(f) = std::env::var("MOCK_SCROLL").ok().and_then(|v| v.parse::<f64>().ok()).filter(|f| *f > 0.0) else { return };
-    let s = outer.child().and_then(|c| inner_scroll(&c)).unwrap_or_else(|| outer.clone());
-    glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || {
+    let outer = outer.clone();
+    let at = std::env::var("MOCK_SCROLL_AT").ok().and_then(|v| v.parse().ok()).unwrap_or(700);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(at), move || {
+        let s = outer.child().and_then(|c| inner_scroll(&c)).unwrap_or(outer.clone());
         let a = s.vadjustment();
         a.set_value(f * (a.upper() - a.page_size()));
     });
 }
 
+/// The plugin's folder: the real plugin's with MOCK_PLUGIN_DIR, else the mockup's views.
+fn plugin_dir() -> String {
+    std::env::var("MOCK_PLUGIN_DIR").map(|d| format!("{}/", d.trim_end_matches('/'))).unwrap_or_else(|_| VIEWS.to_string())
+}
+
+fn live_mode() -> bool {
+    std::env::var_os("MOCK_PLUGIN").is_some()
+}
+
+thread_local! {
+    /// In live mode: where the plugin's item, compact tile and popover go.
+    static SLOTS: RefCell<(Option<gtk::Box>, Option<gtk::Box>, Option<gtk::Box>)> = RefCell::default();
+}
+
+fn slot() -> gtk::Box {
+    let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    b.set_vexpand(true);
+    b
+}
+
 fn plugin_css() {
-    let css = std::fs::read_to_string(format!("{VIEWS}style.css")).unwrap();
+    let dir = plugin_dir();
+    let css = std::fs::read_to_string(format!("{dir}style.css")).unwrap();
     let p = gtk::CssProvider::new();
     p.load_from_string(&view::css::scope(&css, "nyx.ai-hub", 4));
     let display = gtk::gdk::Display::default().unwrap();
     gtk::style_context_add_provider_for_display(&display, &p, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-    gtk::IconTheme::for_display(&display).add_search_path(format!("{VIEWS}icons"));
+    gtk::IconTheme::for_display(&display).add_search_path(format!("{dir}icons"));
 }
 
 fn ctx(max_height: Option<i32>) -> view::Ctx {
     view::Ctx {
         plugin: "nyx.ai-hub".into(),
-        plugin_dir: VIEWS.into(),
+        plugin_dir: plugin_dir().into(),
         storage_dir: "/tmp".into(),
         trusted: true,
         max_height,
@@ -235,7 +268,7 @@ fn cc_chip(icon: &str, on: bool) -> gtk::Box {
 }
 
 /// The Control Center's native split tile (plugin_tiles::template, 2×1 with a detail view).
-fn cc_split(icon: &str, name: &str, status: &str, on: bool, plugin: Option<&str>) -> gtk::Box {
+pub fn cc_split(icon: &str, name: &str, status: &str, on: bool, plugin: Option<&str>) -> gtk::Box {
     let root = cc_frame(2, 1);
     root.add_css_class("cc-split");
     if on {
@@ -318,14 +351,20 @@ fn cc_panel(detail: Option<&str>) -> gtk::Box {
         t.set_hexpand(true);
         head.append(&t);
         page.append(&head);
-        let rendered = view::render(&node(popover_value(view, false), view), &ctx(None));
-        left_align_rows(&rendered.root);
         let body = gtk::ScrolledWindow::new();
         body.set_hscrollbar_policy(gtk::PolicyType::Never);
         body.set_propagate_natural_height(true);
         body.set_max_content_height(680);
         body.add_css_class("cc-plugin-detail");
-        body.set_child(Some(&rendered.root));
+        if live_mode() {
+            let pop = slot();
+            body.set_child(Some(&pop));
+            SLOTS.with(|s| s.borrow_mut().2 = Some(pop));
+        } else {
+            let rendered = view::render(&node(popover_value(view, false), view), &ctx(None));
+            left_align_rows(&rendered.root);
+            body.set_child(Some(&rendered.root));
+        }
         scroll_to(&body);
         page.append(&body);
         root.append(&page);
@@ -355,7 +394,13 @@ fn cc_panel(detail: Option<&str>) -> gtk::Box {
     grid.set_row_spacing(GAP as u32);
     grid.attach(&cc_split("network-wireless-signal-excellent-symbolic", "Wi-Fi", "Home 5G", true, None), 0, 0, 2, 1);
     grid.attach(&cc_split("bluetooth-active-symbolic", "Bluetooth", "AirPods Pro", true, None), 2, 0, 2, 1);
-    grid.attach(&cc_split("nyx-ai-hub-symbolic", "AI Hub", "1 needs you", true, Some("nyx.ai-hub")), 0, 1, 2, 1);
+    if live_mode() {
+        let compact = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        grid.attach(&compact, 0, 1, 2, 1);
+        SLOTS.with(|s| s.borrow_mut().1 = Some(compact));
+    } else {
+        grid.attach(&cc_split("nyx-ai-hub-symbolic", "AI Hub", "1 needs you", true, Some("nyx.ai-hub")), 0, 1, 2, 1);
+    }
     grid.attach(&cc_toggle("notifications-disabled-symbolic", false), 2, 1, 1, 1);
     grid.attach(&cc_toggle("weather-clear-night-symbolic", false), 3, 1, 1, 1);
 
@@ -364,9 +409,15 @@ fn cc_panel(detail: Option<&str>) -> gtk::Box {
     tile.add_css_class("cc-plugin-view");
     tile.add_css_class("cc-clickable");
     tile.add_css_class(&view::css::plugin_class("nyx.ai-hub"));
-    let r = view::render(&load("cc-tile"), &ctx(None));
-    r.root.set_vexpand(true);
-    tile.append(&r.root);
+    if live_mode() {
+        let b = slot();
+        tile.append(&b);
+        SLOTS.with(|s| s.borrow_mut().0 = Some(b));
+    } else {
+        let r = view::render(&load("cc-tile"), &ctx(None));
+        r.root.set_vexpand(true);
+        tile.append(&r.root);
+    }
     grid.attach(&tile, 0, 2, 4, 2);
     grid.attach(&cc_sliders(), 0, 4, 4, 2);
     root.append(&grid);
@@ -397,6 +448,21 @@ fn build(app: &gtk::Application) {
         column.append(&panel);
         window.set_child(Some(&column));
         window.present();
+        if live_mode() {
+            let (tile, compact, pop) = SLOTS.with(|s| s.borrow_mut().clone());
+            let detail = pop.is_some();
+            live::start(
+                live::Live {
+                    item_box: tile.unwrap_or_else(slot),
+                    popover_box: pop.unwrap_or_else(slot),
+                    kind: "control-center".into(),
+                    item: "overview".into(),
+                    compact: if detail { None } else { compact },
+                },
+                ctx(None),
+                ctx(None),
+            );
+        }
         return;
     }
     let window = gtk::ApplicationWindow::builder().application(app).default_width(1280).default_height(800).decorated(false).build();
@@ -414,7 +480,15 @@ fn build(app: &gtk::Application) {
     bar.set_start_widget(Some(&left));
     bar.set_center_widget(Some(&label_item("Tue Nov 10  01:42", &[])));
     let right = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    let hub = item(&load("item"), &view::css::plugin_class("nyx.ai-hub"));
+    let hub = if live_mode() {
+        let b = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        b.add_css_class("bar-item");
+        b.add_css_class(&view::css::plugin_class("nyx.ai-hub"));
+        b.set_valign(gtk::Align::Fill);
+        b
+    } else {
+        item(&load("item"), &view::css::plugin_class("nyx.ai-hub"))
+    };
     if tab != "item" {
         hub.add_css_class("open");
     }
@@ -433,17 +507,21 @@ fn build(app: &gtk::Application) {
     overlay.set_child(Some(&column));
     window.set_child(Some(&overlay));
 
+    let live_pop = slot();
     if tab != "item" {
-        let node = popover(&tab);
-        let rendered = view::render(&node, &ctx(None));
-        left_align_rows(&rendered.root);
         let scroll = gtk::ScrolledWindow::new();
         scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
         scroll.set_propagate_natural_height(true);
         scroll.set_propagate_natural_width(true);
         scroll.set_max_content_height(640);
         scroll.set_max_content_width(480);
-        scroll.set_child(Some(&rendered.root));
+        if live_mode() {
+            scroll.set_child(Some(&live_pop));
+        } else {
+            let rendered = view::render(&popover(&tab), &ctx(None));
+            left_align_rows(&rendered.root);
+            scroll.set_child(Some(&rendered.root));
+        }
         scroll_to(&scroll);
         let pop = gtk::Box::new(gtk::Orientation::Vertical, 0);
         pop.add_css_class("mock-popover");
@@ -455,10 +533,17 @@ fn build(app: &gtk::Application) {
         overlay.add_overlay(&pop);
     }
     window.present();
+    if live_mode() {
+        live::start(
+            live::Live { item_box: hub, popover_box: live_pop, kind: "bar".into(), item: "hub".into(), compact: None },
+            ctx(Some(32)),
+            ctx(None),
+        );
+    }
 }
 
 /// A row wider than its content keeps the content at the start, not centred.
-fn left_align_rows(w: &gtk::Widget) {
+pub fn left_align_rows(w: &gtk::Widget) {
     if w.has_css_class("plugin-row") {
         if let Some(c) = w.first_child() {
             c.set_halign(gtk::Align::Start);

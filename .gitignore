@@ -1,3 +1,5 @@
 /target/
 /dist/
 /vendor/libghostty-vt/*.tar.gz
+# Live renders use real records: never publish them.
+/docs/mockups/live/

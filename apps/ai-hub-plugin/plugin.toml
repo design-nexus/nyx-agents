@@ -1,0 +1,48 @@
+id = "nyx.ai-hub"
+name = "AI Hub"
+version = "0.1.0"
+author = "Design Nexus"
+license = "MIT"
+description = "Coding agents at a glance: who needs you, what's working, each agent's usage and quota, past sessions, and local models."
+api_version = 1
+kinds = ["bar", "control-center"]
+exec = ["nyx-ai-hub-plugin"]
+needs = ["nyx-agents"]
+
+[permissions]
+# Documentation for this trusted plugin. It talks to nyx-agentd and Nyx AI Core
+# over their sockets in $XDG_RUNTIME_DIR (which no sandbox permission grants), and
+# nyx-agentd fetches the quotas you turned on, so it only runs trusted.
+host_commands = [["nyx-agents"]]
+
+[bar]
+mode = "stream"
+section = "right"
+
+[[bar.items]]
+id = "hub"
+name = "AI Hub"
+description = "Agents that need you, what's working, usage, past sessions and local models."
+default = true
+
+[control-center]
+mode = "stream"
+
+[[control-center.items]]
+id = "overview"
+name = "AI Hub"
+description = "Agents that need you and what's working. Click for usage, past sessions and local models."
+sizes = ["4x2"]
+icon = "nyx-ai-hub-symbolic"
+swatch = "teal"
+detail = true
+default = true
+
+[[control-center.items]]
+id = "compact"
+name = "AI Hub"
+description = "How many agents need you. The arrow opens usage, past sessions and local models."
+sizes = ["2x1"]
+icon = "nyx-ai-hub-symbolic"
+swatch = "teal"
+detail = true

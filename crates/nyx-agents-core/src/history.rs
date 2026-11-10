@@ -51,6 +51,42 @@ pub fn records(harness: &str, id: &str) -> Vec<PathBuf> {
     out
 }
 
+/// Text without terminal escapes (the renderers colour for the terminal) or other
+/// control characters, lines kept.
+fn plain(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // CSI: ESC [ parameters final-byte; OSC: ESC ] … BEL or ESC \.
+            match chars.peek() {
+                Some('[') => {
+                    chars.next();
+                    for c in chars.by_ref() {
+                        if ('@'..='~').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    chars.next();
+                    while let Some(c) = chars.next() {
+                        if c == '\x07' || (c == '\x1b' && chars.next_if_eq(&'\\').is_some()) {
+                            break;
+                        }
+                    }
+                }
+                _ => {
+                    chars.next();
+                }
+            }
+        } else if c == '\n' || c == '\t' || !c.is_control() {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// The transcript as plain text, at most `max` bytes from its end.
 pub fn peek(harness: &str, id: &str, max: usize) -> Option<String> {
     let files: Vec<PathBuf> = records(harness, id).into_iter().filter(|p| p.is_file()).collect();
@@ -66,6 +102,7 @@ pub fn peek(harness: &str, id: &str, max: usize) -> Option<String> {
         }
         _ => return None,
     };
+    let text = plain(&text);
     if text.len() <= max {
         return Some(text);
     }
@@ -133,6 +170,11 @@ pub fn terminal_command(argv: &[String], cwd: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn peeks_as_plain_text() {
+        assert_eq!(plain("\x1b[36m●\x1b[0m \x1b[1mBash\x1b[0m\n\x1b]8;;x\x07ok\x07"), "● Bash\nok");
+    }
 
     #[test]
     fn refuses_odd_ids() {
