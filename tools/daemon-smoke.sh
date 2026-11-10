@@ -20,9 +20,11 @@ name = "Fake agent"
 command = ["sh", "-c", "printf 'fake agent ready\\r\\n'; printf '\\033]7501;state=working:app=fake\\033\\\\'; sleep 1; printf 'did the work\\r\\n\\033]7501;state=done:app=fake:msg=RmluaXNoZWQ=\\033\\\\'; exec cat"]
 EOF
 daemon=
+id=
 cleanup() {
   [[ -n $daemon ]] && kill "$daemon" 2>/dev/null || true
-  pkill -f "nyx-agentd hold --id" -U "$(id -u)" --signal TERM 2>/dev/null || true
+  # Only this check's holder: the user's real sessions run under the same name.
+  [[ -n $id ]] && pkill -f "nyx-agentd hold --id $id" -U "$(id -u)" --signal TERM 2>/dev/null || true
   rm -rf "$scratch"
 }
 trap cleanup EXIT
