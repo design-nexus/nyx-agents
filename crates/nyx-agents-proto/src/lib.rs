@@ -824,6 +824,22 @@ pub struct Hub {
     pub working: usize,
     pub subagents_running: usize,
     pub sessions: Vec<HubSession>,
+    /// Each agent with usage, last used first (`usage.list` has the details).
+    #[serde(default)]
+    pub usage: Vec<HubUsage>,
+}
+
+/// An agent's usage in brief: enough for a bar item or a small tile.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct HubUsage {
+    pub harness: String,
+    pub name: String,
+    pub working: bool,
+    pub last_used: Option<u64>,
+    pub today_prompts: u64,
+    pub today_tokens: u64,
+    /// The quota window closest to running out, when quota checks are on.
+    pub quota: Option<QuotaWindow>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -31,6 +31,15 @@ widget) without anything polling.
       "workspace": null,
       "open": ["nyx-agents", "--open", "session/03c6123568cb717dfe390da547bcfccf"]
     }
+  ],
+  "usage": [
+    {
+      "harness": "claude", "name": "Claude Code", "working": true,
+      "last_used": 1794290000, "today_prompts": 38, "today_tokens": 1100000,
+      "quota": { "id": "claude-five_hour", "label": "5 hours", "used_percent": 4.0,
+                 "resets_at": 1794306000, "burn_per_hour": 0.5, "pace": "on-pace",
+                 "left_at_reset": 88.0 }
+    }
   ]
 }
 ```
@@ -51,6 +60,39 @@ widget) without anything polling.
   invisible characters; treat them as plain text.
 - Not included: process ids, harness session ids, environment, prompts or
   output.
+- `usage` is each agent with records or a quota, working first, then last
+  used first. `quota` is the window closest to running out, only when quota
+  checks are on for that agent (see Usage below). `pace`: `steady`,
+  `on-pace`, `tight` (under 15% left at reset), `runs-out` (with `empty_in`
+  seconds), `stale` (reset since it was fetched).
+
+## Usage
+
+`usage.list {refresh}` and `usage.get {harness, refresh}` on the control
+socket return each agent's full usage: today's prompts, steps, tokens and
+cached tokens, the last seven days, models (today, week, all), the top tools,
+the ten most recent sessions, and the quota. A `usage` event follows every
+change. `nyx-agents usage [AGENT] [--json] [--refresh]` prints it, and
+`--local` scans without the manager.
+
+- Read from the agents' own records: Claude Code's transcripts and Codex's
+  rollouts. Reads are incremental (a byte-offset cache per record in
+  `~/.cache/nyx-agents/usage`), every minute, and every ten seconds while the
+  agent is working.
+- Recent sessions carry the session's first prompt as its title, so the full
+  usage stays on the control socket (same user only) and out of `hub.json`.
+- Quotas are off until you list the agents in `~/.config/nyx-agents/config.toml`:
+
+  ```toml
+  [usage]
+  quotas = ["claude", "codex"]
+  ```
+
+  Claude's comes from Anthropic's OAuth usage endpoint with the token Claude
+  Code keeps in `~/.claude/.credentials.json`; Codex's from `codex app-server`
+  (read-only sandbox, no model calls). Tokens are read in `nyx-agentd` only,
+  sent only to their provider, and never stored, logged or passed on. After a
+  failure a provider is asked again after five minutes, or on refresh.
 
 ## Compatibility
 

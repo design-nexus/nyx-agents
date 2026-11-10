@@ -10,6 +10,8 @@ bin=${BIN:-$here/target/debug}
 scratch=$(mktemp -d /tmp/nyx-agents-smoke.XXXX)
 [[ ${NYX_SMOKE_DBUS:-} == 1 ]] || export NYX_AGENTS_NO_DBUS=1
 export NYX_AGENTS_RUNTIME_DIR=$scratch/run NYX_AGENTS_STATE_DIR=$scratch/state XDG_CONFIG_HOME=$scratch/config
+# Usage scans made-up records, never the real ones.
+export NYX_AGENTS_CACHE_DIR=$scratch/cache CLAUDE_CONFIG_DIR=$scratch/claude CODEX_HOME=$scratch/codex
 mkdir -p "$XDG_CONFIG_HOME/nyx-agents"
 cat >"$XDG_CONFIG_HOME/nyx-agents/harnesses.toml" <<'EOF'
 [[harness]]
@@ -43,6 +45,15 @@ if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} && ${NYX_SMOKE_DBUS:-} == 1 ]]; then
   check "control lists the session" '[[ $(dbus Call agents.list_sessions "{}") == *"$id"* ]]'
 fi
 check "hub counts it" '[[ $(jq -r ".agents, .done" "$NYX_AGENTS_RUNTIME_DIR/hub.json" | tr "\n" " ") == "1 1 " ]]'
+
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+mkdir -p "$CLAUDE_CONFIG_DIR/projects/-smoke"
+printf '%s\n' \
+  "{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"$now\",\"cwd\":\"/smoke\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}" \
+  "{\"type\":\"assistant\",\"timestamp\":\"$now\",\"requestId\":\"r1\",\"message\":{\"id\":\"m1\",\"role\":\"assistant\",\"model\":\"claude-opus-5-5\",\"content\":[],\"usage\":{\"input_tokens\":3,\"output_tokens\":4}}}" \
+  >"$CLAUDE_CONFIG_DIR/projects/-smoke/s1.jsonl"
+check "usage reads the records" '[[ $(cli usage claude --refresh --json | jq -r ".[0].today.prompts, .[0].today.tokens, .[0].quota.enabled" | tr "\n" " ") == "1 7 false " ]]'
+check "hub carries usage" '[[ $(jq -r ".usage[0].harness, .usage[0].today_prompts" "$NYX_AGENTS_RUNTIME_DIR/hub.json" | tr "\n" " ") == "claude 1 " ]]'
 
 kill "$daemon"; wait "$daemon" 2>/dev/null || true; daemon=
 check "agent outlives the manager" 'pgrep -f "nyx-agentd hold --id $id" >/dev/null'

@@ -11,10 +11,10 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use nyx_agents_core::{adapters, git, hub, new_id, paths, sanitize, store};
+use nyx_agents_core::{adapters, git, hub, new_id, paths, sanitize, store, usage};
 use nyx_agents_proto::{
     Activity, Attach, AttachMode, Attached, Call, Event, Harness, HolderEvent, Launch, Lifecycle, PROTOCOL_VERSION, Project,
-    Request, Response, RpcError, Session, Status, now_ms,
+    Request, Response, RpcError, Session, Status, Usage, now_ms,
 };
 use serde_json::{Value, json};
 
@@ -32,6 +32,10 @@ pub struct Daemon {
     notifier: Mutex<Option<Arc<crate::notify::Notifier>>>,
     subscribers: Mutex<Vec<Writer>>,
     harnesses: Mutex<Vec<Harness>>,
+    /// Each agent's usage, working first then last used first.
+    usage: Mutex<Vec<Usage>>,
+    /// One scan at a time: scans share each agent's cache files.
+    scanning: Mutex<()>,
     log: PathBuf,
 }
 
@@ -56,7 +60,8 @@ impl Daemon {
 
     fn write_hub(&self) {
         let all: Vec<Session> = self.sessions.lock().unwrap().values().cloned().collect();
-        if let Err(e) = hub::write(&all) {
+        let usage = self.usage.lock().unwrap().clone();
+        if let Err(e) = hub::write(&all, &usage) {
             self.log(&format!("hub: {e}"));
         }
     }
@@ -102,6 +107,34 @@ impl Daemon {
                 n.send(&after.id, &format!("{who} ended unexpectedly"), &format!("{}\nExit code {code}", after.title), true);
             }
         }
+    }
+
+    /// Keep a fresh scan; announce it when it says something new.
+    fn set_usage(&self, u: Usage) {
+        let changed = {
+            let mut all = self.usage.lock().unwrap();
+            let same = |a: &Usage| Usage { updated: 0, ..a.clone() } == Usage { updated: 0, ..u.clone() };
+            let changed = !all.iter().any(|a| a.harness == u.harness && same(a));
+            all.retain(|a| a.harness != u.harness);
+            if u.has_records || u.quota.enabled {
+                all.push(u.clone());
+            }
+            usage::sort(&mut all);
+            changed
+        };
+        if changed {
+            self.emit(&Event::Usage { usage: Box::new(u) });
+            self.write_hub();
+        }
+    }
+
+    fn scan_usage(&self, agent: &str, refresh: bool) -> Option<Usage> {
+        let u = {
+            let _one = self.scanning.lock().unwrap();
+            usage::scan(agent, refresh)?
+        };
+        self.set_usage(u.clone());
+        Some(u)
     }
 
     fn harness(&self, id: &str) -> Option<Harness> {
@@ -154,6 +187,8 @@ pub fn run() -> i32 {
         notifier: Mutex::new(None),
         subscribers: Mutex::new(Vec::new()),
         harnesses: Mutex::new(Vec::new()),
+        usage: Mutex::new(Vec::new()),
+        scanning: Mutex::new(()),
         log: paths::state_dir().join("nyx-agentd.log"),
     });
     d.log(&format!("started pid {}", std::process::id()));
@@ -191,6 +226,11 @@ pub fn run() -> i32 {
             *d.harnesses.lock().unwrap() = list.clone();
             d.emit(&Event::Harnesses { harnesses: list });
         });
+    }
+
+    {
+        let d = d.clone();
+        std::thread::spawn(move || watch_usage(d));
     }
 
     // Kept for the process lifetime; dropping it would release the name.
@@ -350,6 +390,22 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
         | Call::FocusWindow { .. }
         | Call::CaptureWorkspace { .. }
         | Call::WorkspaceInput { .. }) => crate::workspaces::handle(d, c)?,
+        Call::ListUsage { refresh } => {
+            if refresh || d.usage.lock().unwrap().is_empty() {
+                for a in usage::AGENTS {
+                    d.scan_usage(a, refresh);
+                }
+            }
+            serde_json::to_value(&*d.usage.lock().unwrap()).unwrap()
+        }
+        Call::GetUsage { harness, refresh } => {
+            let known = d.usage.lock().unwrap().iter().find(|u| u.harness == harness).cloned();
+            let u = match known {
+                Some(u) if !refresh => u,
+                _ => d.scan_usage(&harness, refresh).ok_or_else(|| err("unknown-harness", "no usage for that agent"))?,
+            };
+            serde_json::to_value(u).unwrap()
+        }
         Call::Subscribe => json!({ "subscribed": true }),
     })
 }
@@ -499,6 +555,23 @@ fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), Rpc
 /// Learn the session id a harness gave itself (Codex, Cursor, oh-my-pi)
 /// from the record it writes, and follow Codex's subagents. Read only;
 /// inotify wakes it, the timeout only notices the session ending.
+/// Rescan each agent's usage every minute, and every ten seconds while it is
+/// working (reads are incremental, so a rescan costs only what was written).
+fn watch_usage(d: Arc<Daemon>) {
+    let mut last: HashMap<&str, Instant> = HashMap::new();
+    loop {
+        for a in usage::AGENTS {
+            let working = d.usage.lock().unwrap().iter().any(|u| u.harness == *a && u.working);
+            let every = Duration::from_secs(if working { 10 } else { 60 });
+            if last.get(a).is_none_or(|t| t.elapsed() >= every) {
+                last.insert(a, Instant::now());
+                d.scan_usage(a, false);
+            }
+        }
+        std::thread::sleep(Duration::from_secs(5));
+    }
+}
+
 fn watch_records(d: Arc<Daemon>, id: String) {
     use nyx_agents_core::{codex, inotify::Watcher, sessions};
     let Some((harness, cwd, since, mut hs)) =
