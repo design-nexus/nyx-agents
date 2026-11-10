@@ -12,6 +12,7 @@ pub mod sanitize;
 pub mod sessions;
 pub mod sqlite_sessions;
 pub mod store;
+pub mod usage;
 pub mod worktree;
 
 /// A random identifier: 128 bits from the kernel, as hex.

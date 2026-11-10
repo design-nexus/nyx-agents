@@ -368,6 +368,8 @@ fn on_msg(m: Msg) {
         }
         Msg::Event(Event::Workspace { workspace }) => super::workspace::changed(&workspace),
         Msg::Event(Event::WorkspaceRemoved { id }) => super::workspace::removed(&id),
+        // The app has no usage view; the AI Hub shows it.
+        Msg::Event(Event::Usage { .. }) => return,
         Msg::Disconnected(why) => {
             if ui.connected.replace(false) {
                 toast("Lost the Nyx Agent Manager; reconnecting…");

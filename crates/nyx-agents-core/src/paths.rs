@@ -48,6 +48,13 @@ pub fn session_dir(id: &str) -> PathBuf {
     sessions_dir().join(id)
 }
 
+/// `~/.cache/nyx-agents` (`NYX_AGENTS_CACHE_DIR` overrides).
+pub fn cache_dir() -> PathBuf {
+    std::env::var_os("NYX_AGENTS_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| env_dir("XDG_CACHE_HOME", ".cache").join("nyx-agents"))
+}
+
 /// `~/.config/nyx-agents`.
 pub fn config_dir() -> PathBuf {
     env_dir("XDG_CONFIG_HOME", ".config").join("nyx-agents")

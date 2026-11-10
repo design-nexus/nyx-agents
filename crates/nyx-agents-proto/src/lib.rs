@@ -339,6 +339,153 @@ pub struct Screenshot {
     pub png: String,
 }
 
+// ---------- Usage ----------
+
+/// One agent's usage, read from its own records, plus its provider's quota when
+/// the user turned quota checks on for it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Usage {
+    pub harness: String,
+    pub name: String,
+    /// Any records were found.
+    pub has_records: bool,
+    /// One of its sessions is running.
+    pub working: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// When it was last used (Unix seconds), from its newest record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_used: Option<u64>,
+    pub today: UsageToday,
+    /// Over every record read (Codex keeps 30 days).
+    pub totals: UsageTotals,
+    /// The last seven days, oldest first, ending today.
+    pub days: Vec<UsageDay>,
+    /// Most used first.
+    pub models: Vec<ModelUsage>,
+    /// Most used first, at most 12.
+    pub tools: Vec<ToolUsage>,
+    /// Newest first, at most 10.
+    pub sessions: Vec<UsageSession>,
+    pub quota: Quota,
+    /// When this was scanned (Unix seconds).
+    pub updated: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct UsageToday {
+    pub prompts: u64,
+    pub sessions: u64,
+    pub steps: u64,
+    /// Input, output and cache writes; cache reads are `cached`.
+    pub tokens: u64,
+    pub cached: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct UsageTotals {
+    pub prompts: u64,
+    pub sessions: u64,
+    pub steps: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct UsageDay {
+    /// `YYYY-MM-DD`, local time.
+    pub date: String,
+    pub prompts: u64,
+    pub steps: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ModelUsage {
+    pub name: String,
+    pub prompts: u64,
+    pub steps: u64,
+    pub today_prompts: u64,
+    pub today_steps: u64,
+    pub week_prompts: u64,
+    pub week_steps: u64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cached_tokens: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolUsage {
+    pub name: String,
+    pub calls: u64,
+}
+
+/// A recent session as the agent's records describe it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct UsageSession {
+    /// The harness's own session id.
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub cwd: String,
+    /// Unix seconds.
+    pub updated: u64,
+    pub prompts: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    pub tokens: u64,
+    /// A running process of the harness has it open.
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Quota {
+    /// The user turned quota checks on for this agent (`[usage] quotas`).
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    pub windows: Vec<QuotaWindow>,
+    /// Why the last check failed; `windows` are then the last good ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// When `windows` were fetched (Unix seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<u64>,
+}
+
+/// One rate-limit window: the 5-hour window, the week, a model's week.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct QuotaWindow {
+    pub id: String,
+    pub label: String,
+    /// 0–100.
+    pub used_percent: f64,
+    /// Unix seconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<u64>,
+    /// Percent used per hour over the last six hours since it last refilled.
+    pub burn_per_hour: f64,
+    pub pace: Pace,
+    /// At this pace, the percent left when it resets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left_at_reset: Option<f64>,
+    /// At this pace, seconds until it runs out, when that is before the reset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub empty_in: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Pace {
+    /// Not being used up (or no reset time).
+    #[default]
+    Steady,
+    OnPace,
+    /// Under 15% left at reset.
+    Tight,
+    /// Runs out before it resets.
+    RunsOut,
+    /// The window has reset since these numbers were fetched.
+    Stale,
+}
+
 // ---------- Control requests ----------
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -463,6 +610,19 @@ pub enum Call {
         id: WorkspaceId,
         actions: Vec<InputAction>,
     },
+    /// Every agent's usage that has records or a quota, last used first.
+    /// `refresh` rescans now (and fetches quotas, ignoring the retry wait).
+    #[serde(rename = "usage.list")]
+    ListUsage {
+        #[serde(default)]
+        refresh: bool,
+    },
+    #[serde(rename = "usage.get")]
+    GetUsage {
+        harness: String,
+        #[serde(default)]
+        refresh: bool,
+    },
     #[serde(rename = "events.subscribe")]
     Subscribe,
 }
@@ -531,6 +691,10 @@ pub enum Event {
     },
     WorkspaceRemoved {
         id: WorkspaceId,
+    },
+    /// An agent's usage changed.
+    Usage {
+        usage: Box<Usage>,
     },
 }
 

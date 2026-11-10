@@ -233,6 +233,11 @@ pub fn harnesses(versions: bool) -> Vec<Harness> {
     out
 }
 
+/// A built-in harness's program, found as `harnesses` finds it (never a mise shim).
+pub fn exe(id: &str) -> Option<PathBuf> {
+    BUILTINS.iter().find(|b| b.id == id).and_then(|b| discover::find(b.exe, b.mise))
+}
+
 fn exe_for(h: &Harness) -> Result<PathBuf, String> {
     h.path.as_ref().map(PathBuf::from).ok_or_else(|| format!("{} is not installed", h.name))
 }

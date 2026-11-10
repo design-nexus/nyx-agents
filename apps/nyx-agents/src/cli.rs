@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use nyx_agents_client::{Attachment, Client, FrameKind};
-use nyx_agents_proto::{Activity, AgentWorkspace, AttachMode, Call, Launch, Lifecycle, ResizeMsg, Session, now_ms};
+use nyx_agents_proto::{Activity, AgentWorkspace, AttachMode, Call, Launch, Lifecycle, ResizeMsg, Session, Usage, now_ms};
 use nyx_term::{Terminal, TerminalOptions};
 
 fn flag(args: &[String], name: &str) -> bool {
@@ -33,9 +33,26 @@ pub fn run(args: &[String]) -> i32 {
         return 0;
     }
     let result = (|| -> Result<i32, Box<dyn std::error::Error>> {
-        let mut c = Client::connect("nyx-agents-cli")?;
         let json = flag(args, "--json");
+        if cmd == "usage" && flag(args, "--local") {
+            let refresh = flag(args, "--refresh");
+            let list = match positional(args) {
+                Some(a) => nyx_agents_core::usage::scan(a, refresh).into_iter().collect(),
+                None => nyx_agents_core::usage::scan_all(refresh),
+            };
+            print_usage(&list, json)?;
+            return Ok(0);
+        }
+        let mut c = Client::connect("nyx-agents-cli")?;
         match cmd {
+            "usage" => {
+                let refresh = flag(args, "--refresh");
+                let list: Vec<Usage> = match positional(args) {
+                    Some(a) => vec![c.call(Call::GetUsage { harness: a.to_string(), refresh })?],
+                    None => c.call(Call::ListUsage { refresh })?,
+                };
+                print_usage(&list, json)?;
+            }
             "harnesses" => {
                 let list = c.harnesses(flag(args, "--refresh"))?;
                 if json {
@@ -222,6 +239,50 @@ fn workspaces(c: &mut Client, args: &[String], json: bool) -> Result<i32, Box<dy
         }
     }
     Ok(0)
+}
+
+fn count(n: u64) -> String {
+    match n {
+        0..=9_999 => n.to_string(),
+        10_000..=999_999 => format!("{:.1} k", n as f64 / 1e3),
+        1_000_000..=999_999_999 => format!("{:.1} M", n as f64 / 1e6),
+        _ => format!("{:.1} B", n as f64 / 1e9),
+    }
+}
+
+fn print_usage(list: &[Usage], json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(list)?);
+        return Ok(());
+    }
+    if list.is_empty() {
+        println!("No agent usage found.");
+    }
+    for u in list {
+        let when = if u.working { "working".to_string() } else { u.last_used.map(|t| format!("{} ago", ago(t * 1000))).unwrap_or_else(|| "never".into()) };
+        println!(
+            "{:<8} {:<12} {:<10} today {} prompts, {} steps, {} tokens ({} cached)",
+            u.harness,
+            u.name,
+            when,
+            u.today.prompts,
+            u.today.steps,
+            count(u.today.tokens),
+            count(u.today.cached)
+        );
+        if let Some(m) = &u.model {
+            println!("  model    {m}");
+        }
+        for w in &u.quota.windows {
+            println!("  {:<8} {:.0}% left", w.label, 100.0 - w.used_percent);
+        }
+        match (&u.quota.error, u.quota.enabled) {
+            (Some(e), _) => println!("  quota    {e}"),
+            (None, false) => println!("  quota    off (add \"{}\" to [usage] quotas in config.toml)", u.harness),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn ago(ms: u64) -> String {
