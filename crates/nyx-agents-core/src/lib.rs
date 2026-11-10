@@ -9,6 +9,7 @@ pub mod hub;
 pub mod inotify;
 pub mod paths;
 pub mod sanitize;
+pub mod sessions;
 pub mod store;
 pub mod worktree;
 

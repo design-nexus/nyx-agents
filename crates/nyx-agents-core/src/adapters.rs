@@ -100,7 +100,7 @@ const BUILTINS: &[Builtin] = &[
         mise: &["cursor-agent"],
         auth_files: &[],
         auth_env: &["CURSOR_API_KEY"],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
     Builtin {
         id: "opencode",
@@ -175,7 +175,11 @@ fn caps(id: &str) -> Capabilities {
             Capabilities { resume: true, subagents: Some(nyx_agents_proto::SubagentSource::Transcript), ..Default::default() }
         }
         // Seen reporting OSC 7501 status when launched (2026-11-10).
-        "antigravity" | "omp" | "crush" | "opencode" => Capabilities { program_status: true, ..Default::default() },
+        "antigravity" | "crush" | "opencode" => Capabilities { program_status: true, ..Default::default() },
+        // Verified: `omp -r <id>`; the id is read from oh-my-pi's session file.
+        "omp" => Capabilities { program_status: true, resume: true, ..Default::default() },
+        // Verified: `cursor-agent --resume <chatId>`; the id is read from the chat's meta.json.
+        "cursor" => Capabilities { resume: true, ..Default::default() },
         _ => Capabilities::default(),
     }
 }
@@ -263,6 +267,8 @@ pub fn resume(h: &Harness, s: &Session) -> Result<Plan, String> {
             Ok(Plan { argv: vec![exe, "--resume".into(), id.into()], harness_session: Some(id.into()) })
         }
         ("codex", Some(id)) => Ok(Plan { argv: vec![exe, "resume".into(), id.into()], harness_session: Some(id.into()) }),
+        ("cursor", Some(id)) => Ok(Plan { argv: vec![exe, "--resume".into(), id.into()], harness_session: Some(id.into()) }),
+        ("omp", Some(id)) => Ok(Plan { argv: vec![exe, "-r".into(), id.into()], harness_session: Some(id.into()) }),
         _ => Err(format!("{} sessions cannot be resumed yet", h.name)),
     }
 }
