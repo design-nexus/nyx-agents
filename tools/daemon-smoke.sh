@@ -11,7 +11,7 @@ scratch=$(mktemp -d /tmp/nyx-agents-smoke.XXXX)
 [[ ${NYX_SMOKE_DBUS:-} == 1 ]] || export NYX_AGENTS_NO_DBUS=1
 export NYX_AGENTS_RUNTIME_DIR=$scratch/run NYX_AGENTS_STATE_DIR=$scratch/state XDG_CONFIG_HOME=$scratch/config
 # Usage scans made-up records, never the real ones.
-export NYX_AGENTS_CACHE_DIR=$scratch/cache CLAUDE_CONFIG_DIR=$scratch/claude CODEX_HOME=$scratch/codex
+export NYX_AGENTS_CACHE_DIR=$scratch/cache CLAUDE_CONFIG_DIR=$scratch/claude CODEX_HOME=$scratch/codex XDG_DATA_HOME=$scratch/data
 mkdir -p "$XDG_CONFIG_HOME/nyx-agents"
 cat >"$XDG_CONFIG_HOME/nyx-agents/harnesses.toml" <<'EOF'
 [[harness]]
@@ -53,7 +53,12 @@ printf '%s\n' \
   "{\"type\":\"assistant\",\"timestamp\":\"$now\",\"requestId\":\"r1\",\"message\":{\"id\":\"m1\",\"role\":\"assistant\",\"model\":\"claude-opus-5-5\",\"content\":[],\"usage\":{\"input_tokens\":3,\"output_tokens\":4}}}" \
   >"$CLAUDE_CONFIG_DIR/projects/-smoke/s1.jsonl"
 check "usage reads the records" '[[ $(cli usage claude --refresh --json | jq -r ".[0].today.prompts, .[0].today.tokens, .[0].quota.enabled" | tr "\n" " ") == "1 7 false " ]]'
+check "history lists it" '[[ $(cli history claude --json | jq -r ".[0].id, .[0].title, .[0].can_trash" | tr "\n" " ") == "s1 hello true " ]]'
+check "peek shows the transcript" '[[ $(cli history peek claude s1) == *hello* ]]'
+check "terminal command, not run" '[[ $(cli history terminal claude s1 --json | jq -r ".argv[0], .argv[-1]" | tr "\n" " ") == "xdg-terminal-exec s1 " ]]'
 check "hub carries usage" '[[ $(jq -r ".usage[0].harness, .usage[0].today_prompts" "$NYX_AGENTS_RUNTIME_DIR/hub.json" | tr "\n" " ") == "claude 1 " ]]'
+
+check "trash keeps it restorable" 'cli history trash claude s1 >/dev/null && [[ -f $XDG_DATA_HOME/Trash/files/s1.jsonl && ! -e $CLAUDE_CONFIG_DIR/projects/-smoke/s1.jsonl ]]'
 
 kill "$daemon"; wait "$daemon" 2>/dev/null || true; daemon=
 check "agent outlives the manager" 'pgrep -f "nyx-agentd hold --id $id" >/dev/null'

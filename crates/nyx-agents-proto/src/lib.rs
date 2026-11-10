@@ -486,6 +486,31 @@ pub enum Pace {
     Stale,
 }
 
+/// A session in an agent's own records, whether or not Nyx Agents started it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PastSession {
+    pub harness: String,
+    /// The harness's own session id.
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub cwd: String,
+    /// Unix seconds.
+    pub updated: u64,
+    pub prompts: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// A running process of the harness has it open.
+    pub active: bool,
+    /// The Nyx Agents session that runs or ran it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed: Option<SessionId>,
+    /// It can be resumed (its harness supports that).
+    pub resumable: bool,
+    /// Its records can be moved to the Trash.
+    pub can_trash: bool,
+}
+
 // ---------- Control requests ----------
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -622,6 +647,43 @@ pub enum Call {
         harness: String,
         #[serde(default)]
         refresh: bool,
+    },
+    /// Past sessions from the agents' own records, newest first. `query`
+    /// matches titles and folders, ignoring case.
+    #[serde(rename = "history.list")]
+    ListHistory {
+        #[serde(default)]
+        harness: Option<String>,
+        #[serde(default)]
+        query: Option<String>,
+        #[serde(default)]
+        limit: Option<usize>,
+    },
+    /// Continue a past session in Nyx Agents: its own session when Nyx Agents
+    /// runs or ran it, else a new one resuming it.
+    #[serde(rename = "history.resume")]
+    ResumePast {
+        harness: String,
+        id: String,
+    },
+    /// The command that continues a past session in the user's terminal:
+    /// `{argv, cwd}`, for the caller to run (never through a shell).
+    #[serde(rename = "history.terminal")]
+    ResumeInTerminal {
+        harness: String,
+        id: String,
+    },
+    /// The transcript as plain text (its last 64 KiB).
+    #[serde(rename = "history.peek")]
+    Peek {
+        harness: String,
+        id: String,
+    },
+    /// Move a past session's records to the Trash. Not while it runs.
+    #[serde(rename = "history.trash")]
+    TrashPast {
+        harness: String,
+        id: String,
     },
     #[serde(rename = "events.subscribe")]
     Subscribe,

@@ -9,6 +9,7 @@
 //!   nyx-agents resume ID | stop ID [--force] | forget ID
 //!   nyx-agents workspaces [--json] | workspaces new [--name N] [--size WxH] | workspaces rm ID
 //!   nyx-agents hub [--watch]
+//!   nyx-agents history [AGENT] [--query Q] [--json] | history resume|terminal|peek|trash AGENT ID
 //!   nyx-agents usage [AGENT] [--json] [--refresh] [--local]   --local scans here, without the manager
 //!   nyx-agents settings ...            the Nyx Settings page
 //!   nyx-agents computer --workspace ID computer-use tools (an MCP server on stdio)
@@ -21,7 +22,7 @@ mod settings;
 mod ui;
 
 const COMMANDS: &[&str] =
-    &["harnesses", "ls", "status", "launch", "attach", "resume", "stop", "forget", "workspaces", "hub", "usage", "help", "-h", "--help"];
+    &["harnesses", "ls", "status", "launch", "attach", "resume", "stop", "forget", "workspaces", "hub", "usage", "history", "help", "-h", "--help"];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

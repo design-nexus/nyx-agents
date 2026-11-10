@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use nyx_agents_client::{Attachment, Client, FrameKind};
-use nyx_agents_proto::{Activity, AgentWorkspace, AttachMode, Call, Launch, Lifecycle, ResizeMsg, Session, Usage, now_ms};
+use nyx_agents_proto::{Activity, AgentWorkspace, AttachMode, Call, Launch, Lifecycle, PastSession, ResizeMsg, Session, Usage, now_ms};
 use nyx_term::{Terminal, TerminalOptions};
 
 fn flag(args: &[String], name: &str) -> bool {
@@ -156,6 +156,7 @@ pub fn run(args: &[String]) -> i32 {
                 c.forget(&id)?;
             }
             "workspaces" => return workspaces(&mut c, args, json),
+            "history" => return history(&mut c, args, json),
             "hub" => {
                 let path = nyx_agents_core::paths::hub_file();
                 let print = || {
@@ -236,6 +237,57 @@ fn workspaces(c: &mut Client, args: &[String], json: bool) -> Result<i32, Box<dy
         Some(other) => {
             eprintln!("nyx-agents: unknown workspaces command {other}");
             return Ok(2);
+        }
+    }
+    Ok(0)
+}
+
+/// `history [AGENT] [--query Q] [--json]`, `history resume|terminal|peek|trash AGENT ID`.
+fn history(c: &mut Client, args: &[String], json: bool) -> Result<i32, Box<dyn std::error::Error>> {
+    let pair = || -> Result<(String, String), Box<dyn std::error::Error>> {
+        Ok((args.get(2).ok_or("needs an agent and a session id")?.clone(), args.get(3).ok_or("needs a session id")?.clone()))
+    };
+    match args.get(1).map(String::as_str) {
+        Some("resume") => {
+            let (harness, id) = pair()?;
+            let s: Session = c.call(Call::ResumePast { harness, id })?;
+            println!("{}", s.id);
+        }
+        Some("terminal") => {
+            let (harness, id) = pair()?;
+            let r: serde_json::Value = c.call(Call::ResumeInTerminal { harness, id })?;
+            let argv: Vec<String> = serde_json::from_value(r["argv"].clone())?;
+            let cwd = r["cwd"].as_str().unwrap_or(".");
+            if json {
+                println!("{r}");
+            } else {
+                use std::os::unix::process::CommandExt;
+                std::process::Command::new(&argv[0]).args(&argv[1..]).current_dir(cwd).process_group(0).spawn()?;
+            }
+        }
+        Some("peek") => {
+            let (harness, id) = pair()?;
+            let r: serde_json::Value = c.call(Call::Peek { harness, id })?;
+            println!("{}", r["text"].as_str().unwrap_or(""));
+        }
+        Some("trash") => {
+            let (harness, id) = pair()?;
+            let r: serde_json::Value = c.call(Call::TrashPast { harness, id })?;
+            println!("Moved {} files to the Trash.", r["trashed"]);
+        }
+        _ => {
+            let harness = args.get(1).filter(|a| !a.starts_with("--")).cloned();
+            let list: Vec<PastSession> = c.call(Call::ListHistory { harness, query: opt(args, "--query").map(String::from), limit: None })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&list)?);
+            } else if list.is_empty() {
+                println!("No past sessions.");
+            }
+            for p in list.iter().filter(|_| !json) {
+                let state = if p.active { "running" } else if p.managed.is_some() { "in Nyx Agents" } else { "" };
+                let folder = std::path::Path::new(&p.cwd).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                println!("{:<8} {:<10} {:>4}  {:<16} {}  {state}", p.harness, &p.id[..10.min(p.id.len())], ago(p.updated * 1000), folder, p.title);
+            }
         }
     }
     Ok(0)

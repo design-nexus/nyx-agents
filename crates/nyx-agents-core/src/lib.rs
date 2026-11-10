@@ -5,6 +5,7 @@ pub mod claude;
 pub mod codex;
 pub mod discover;
 pub mod git;
+pub mod history;
 pub mod hub;
 pub mod inotify;
 pub mod paths;

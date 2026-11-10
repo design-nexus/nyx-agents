@@ -59,7 +59,7 @@ fn claude_counts_each_message_once() {
             "content": [], "usage": { "input_tokens": 7, "output_tokens": 3 } } })],
     );
 
-    let u = usage::claude::scan(&base, false);
+    let (u, _) = usage::claude::scan(&base, false);
     assert!(u.has_records);
     assert_eq!(u.today.prompts, 1);
     assert_eq!(u.today.steps, 2);
@@ -82,7 +82,7 @@ fn claude_counts_each_message_once() {
         json!({ "type": "assistant", "timestamp": t, "requestId": "r3", "message": { "id": "m3", "role": "assistant", "model": "claude-opus-5-5",
             "content": [], "usage": { "input_tokens": 1, "output_tokens": 1 } } }),
     ]);
-    let u = usage::claude::scan(&base, false);
+    let (u, _) = usage::claude::scan(&base, false);
     assert_eq!(u.today.prompts, 2);
     assert_eq!(u.today.steps, 3);
 }
@@ -104,7 +104,8 @@ fn codex_counts_turns_and_calls() {
     ]);
     write_lines(&base.join("session_index.jsonl"), &[json!({ "id": id, "thread_name": "Fix the CSV parser" })]);
 
-    let u = usage::codex::scan(&base, false);
+    let (u, history) = usage::codex::scan(&base, false);
+    assert_eq!(history.len(), 1);
     assert!(u.has_records);
     assert_eq!((u.today.prompts, u.today.steps, u.today.tokens, u.today.cached), (1, 1, 120, 80));
     assert_eq!(u.sessions.len(), 1);

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use nyx_agents_core::{adapters, git, hub, new_id, paths, sanitize, store, usage};
 use nyx_agents_proto::{
     Activity, Attach, AttachMode, Attached, Call, Event, Harness, HolderEvent, Launch, Lifecycle, PROTOCOL_VERSION, Project,
-    Request, Response, RpcError, Session, Status, Usage, now_ms,
+    PastSession, Request, Response, RpcError, Session, Status, Usage, UsageSession, now_ms,
 };
 use serde_json::{Value, json};
 
@@ -36,6 +36,8 @@ pub struct Daemon {
     usage: Mutex<Vec<Usage>>,
     /// One scan at a time: scans share each agent's cache files.
     scanning: Mutex<()>,
+    /// Each agent's past sessions from its records, newest first.
+    history: Mutex<HashMap<String, Vec<UsageSession>>>,
     log: PathBuf,
 }
 
@@ -129,10 +131,11 @@ impl Daemon {
     }
 
     fn scan_usage(&self, agent: &str, refresh: bool) -> Option<Usage> {
-        let u = {
+        let (u, past) = {
             let _one = self.scanning.lock().unwrap();
-            usage::scan(agent, refresh)?
+            usage::scan_with_history(agent, refresh)?
         };
+        self.history.lock().unwrap().insert(agent.to_string(), past);
         self.set_usage(u.clone());
         Some(u)
     }
@@ -189,6 +192,7 @@ pub fn run() -> i32 {
         harnesses: Mutex::new(Vec::new()),
         usage: Mutex::new(Vec::new()),
         scanning: Mutex::new(()),
+        history: Mutex::new(HashMap::new()),
         log: paths::state_dir().join("nyx-agentd.log"),
     });
     d.log(&format!("started pid {}", std::process::id()));
@@ -406,8 +410,171 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
             };
             serde_json::to_value(u).unwrap()
         }
+        Call::ListHistory { harness, query, limit } => {
+            if d.history.lock().unwrap().is_empty() {
+                for a in usage::AGENTS {
+                    d.scan_usage(a, false);
+                }
+            }
+            serde_json::to_value(list_history(d, harness.as_deref(), query.as_deref(), limit.unwrap_or(200))).unwrap()
+        }
+        Call::ResumePast { harness, id } => serde_json::to_value(resume_past(d, &harness, &id)?).unwrap(),
+        Call::ResumeInTerminal { harness, id } => {
+            let p = past(d, &harness, &id)?;
+            if p.active {
+                return Err(err("running", "that session is running"));
+            }
+            let h = d.harness(&harness).ok_or_else(|| err("unknown-harness", "harness not found"))?;
+            let plan = adapters::resume(&h, &resume_record(&harness, &id)).map_err(|e| err("not-resumable", &e))?;
+            let cwd = existing_dir(&p.cwd);
+            json!({ "argv": nyx_agents_core::history::terminal_command(&plan.argv, &cwd), "cwd": cwd })
+        }
+        Call::Peek { harness, id } => {
+            past(d, &harness, &id)?;
+            let text = nyx_agents_core::history::peek(&harness, &id, 64 * 1024).ok_or_else(|| err("not-found", "no transcript"))?;
+            json!({ "text": text })
+        }
+        Call::TrashPast { harness, id } => {
+            let p = past(d, &harness, &id)?;
+            if !p.can_trash {
+                return Err(err("running", "a running session can't be moved to the Trash"));
+            }
+            let files = nyx_agents_core::history::records(&harness, &id);
+            if files.is_empty() {
+                return Err(err("not-found", "no records for that session"));
+            }
+            nyx_agents_core::history::trash(&files).map_err(|e| err("trash", &e.to_string()))?;
+            d.log(&format!("trashed {harness} session {id} ({} files)", files.len()));
+            if let Some(list) = d.history.lock().unwrap().get_mut(&harness) {
+                list.retain(|s| s.id != id);
+            }
+            d.scan_usage(&harness, false);
+            json!({ "trashed": files.len() })
+        }
         Call::Subscribe => json!({ "subscribed": true }),
     })
+}
+
+/// Past sessions with what Nyx Agents knows about them.
+fn list_history(d: &Arc<Daemon>, harness: Option<&str>, query: Option<&str>, limit: usize) -> Vec<PastSession> {
+    let managed: HashMap<(String, String), (String, bool)> = d
+        .sessions
+        .lock()
+        .unwrap()
+        .values()
+        .filter_map(|s| {
+            let running = matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting);
+            Some(((s.harness.clone(), s.harness_session.clone()?), (s.id.clone(), running)))
+        })
+        .collect();
+    let q = query.map(str::to_lowercase).filter(|q| !q.is_empty());
+    let history = d.history.lock().unwrap().clone();
+    let mut out: Vec<PastSession> = vec![];
+    for (agent, list) in history.iter().filter(|(a, _)| harness.is_none_or(|h| h == a.as_str())) {
+        let resumable = d.harness(agent).is_some_and(|h| h.capabilities.resume);
+        for s in list {
+            if let Some(q) = &q
+                && !s.title.to_lowercase().contains(q)
+                && !s.cwd.to_lowercase().contains(q)
+            {
+                continue;
+            }
+            let m = managed.get(&(agent.clone(), s.id.clone()));
+            let active = s.active || m.is_some_and(|(_, running)| *running);
+            out.push(PastSession {
+                harness: agent.clone(),
+                id: s.id.clone(),
+                title: s.title.clone(),
+                cwd: s.cwd.clone(),
+                updated: s.updated,
+                prompts: s.prompts,
+                model: s.model.clone(),
+                active,
+                managed: m.map(|(id, _)| id.clone()),
+                resumable,
+                can_trash: !active,
+            });
+        }
+    }
+    out.sort_by(|a, b| b.updated.cmp(&a.updated).then(a.id.cmp(&b.id)));
+    out.truncate(limit);
+    out
+}
+
+fn past(d: &Arc<Daemon>, harness: &str, id: &str) -> Result<PastSession, RpcError> {
+    list_history(d, Some(harness), None, usize::MAX).into_iter().find(|p| p.id == id).ok_or_else(|| err("not-found", "no such past session"))
+}
+
+/// What `adapters::resume` needs to know about a past session.
+fn resume_record(harness: &str, id: &str) -> Session {
+    Session {
+        id: String::new(),
+        harness: harness.into(),
+        title: String::new(),
+        project: None,
+        workspace: None,
+        cwd: String::new(),
+        worktree: None,
+        harness_session: Some(id.into()),
+        lifecycle: Lifecycle::Exited,
+        status: Status::default(),
+        exit_code: None,
+        pid: None,
+        created: 0,
+        ended: None,
+        cols: 0,
+        rows: 0,
+        resumable: true,
+        subagents: Vec::new(),
+    }
+}
+
+fn existing_dir(cwd: &str) -> String {
+    if !cwd.is_empty() && Path::new(cwd).is_dir() { cwd.to_string() } else { paths::home().display().to_string() }
+}
+
+/// Continue a past session in Nyx Agents: in its own session when Nyx Agents runs
+/// or ran it, else in a new one.
+fn resume_past(d: &Arc<Daemon>, harness: &str, id: &str) -> Result<Session, RpcError> {
+    let p = past(d, harness, id)?;
+    if let Some(mid) = &p.managed {
+        let s = d.sessions.lock().unwrap().get(mid).cloned();
+        if let Some(s) = s {
+            return if matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting) { Ok(s) } else { resume(d, mid) };
+        }
+    }
+    if p.active {
+        return Err(err("running", "that session is running outside Nyx Agents"));
+    }
+    let h = d.harness(harness).ok_or_else(|| err("unknown-harness", "harness not found"))?;
+    let plan = adapters::resume(&h, &resume_record(harness, id)).map_err(|e| err("not-resumable", &e))?;
+    let cwd = PathBuf::from(existing_dir(&p.cwd));
+    let ctx = git::context(&cwd);
+    let s = Session {
+        id: new_id(),
+        harness: h.id.clone(),
+        title: sanitize::line(&p.title, 120),
+        project: ctx.as_ref().map(|(_, root)| project_id(root)),
+        workspace: None,
+        cwd: cwd.display().to_string(),
+        worktree: ctx.map(|(wt, _)| wt),
+        harness_session: plan.harness_session.clone(),
+        lifecycle: Lifecycle::Starting,
+        status: Status::default(),
+        exit_code: None,
+        pid: None,
+        created: now_ms(),
+        ended: None,
+        // The usual size until a view attaches.
+        cols: 120,
+        rows: 36,
+        resumable: false,
+        subagents: Vec::new(),
+    };
+    d.sessions.lock().unwrap().insert(s.id.clone(), s.clone());
+    d.changed(&s);
+    start_holder(d, &s, &plan.argv)?;
+    Ok(s)
 }
 
 fn project_root(cwd: &str) -> Option<PathBuf> {

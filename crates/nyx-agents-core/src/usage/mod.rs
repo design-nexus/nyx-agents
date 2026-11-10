@@ -13,10 +13,13 @@ pub mod time;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use nyx_agents_proto::{ModelUsage, ToolUsage, Usage, UsageDay};
+use nyx_agents_proto::{ModelUsage, ToolUsage, Usage, UsageDay, UsageSession};
 
 /// The agents with a usage scanner.
 pub const AGENTS: &[&str] = &["claude", "codex"];
+
+/// Past sessions kept per agent for the session history.
+pub const HISTORY: usize = 50;
 
 /// `~/.cache/nyx-agents/usage/<agent>`.
 pub fn cache_dir(agent: &str) -> PathBuf {
@@ -25,13 +28,18 @@ pub fn cache_dir(agent: &str) -> PathBuf {
 
 /// Scan one agent. `refresh` also fetches its quota now, ignoring the retry wait.
 pub fn scan(agent: &str, refresh: bool) -> Option<Usage> {
-    let mut u = match agent {
+    scan_with_history(agent, refresh).map(|(u, _)| u)
+}
+
+/// Scan one agent: its usage, and its past sessions (newest first, at most `HISTORY`).
+pub fn scan_with_history(agent: &str, refresh: bool) -> Option<(Usage, Vec<UsageSession>)> {
+    let (mut u, history) = match agent {
         "claude" => claude::scan(&claude::base(), refresh),
         "codex" => codex::scan(&codex::base(), refresh),
         _ => return None,
     };
     u.updated = time::now() as u64;
-    Some(u)
+    Some((u, history))
 }
 
 /// Every agent that has records or a quota, last used first.

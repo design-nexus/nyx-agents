@@ -173,7 +173,8 @@ fn find_uuid(s: &str) -> Option<String> {
     })
 }
 
-pub fn scan(base: &Path, refresh: bool) -> Usage {
+/// The usage, and every session found (newest first, at most 50).
+pub fn scan(base: &Path, refresh: bool) -> (Usage, Vec<UsageSession>) {
     let mut u = Usage { harness: "codex".into(), name: "Codex".into(), ..Default::default() };
     let default_model = configured_model(base).unwrap_or_else(|| "Codex".into());
     let mut t = Tally::default();
@@ -241,10 +242,10 @@ pub fn scan(base: &Path, refresh: bool) -> Usage {
     u.today.sessions = sessions.iter().filter(|s| t.is_today(&time::local_day(s.updated as f64))).count() as u64;
     u.totals.sessions = recent;
     t.finish(&mut u);
-    sessions.truncate(10);
-    u.sessions = sessions;
+    sessions.truncate(super::HISTORY);
+    u.sessions = sessions.iter().take(10).cloned().collect();
     u.quota = quota::get("codex", refresh, 180.0, fetch_quota);
-    u
+    (u, sessions)
 }
 
 /// Lines from a child's stdout, so each reply can wait with a time limit.

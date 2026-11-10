@@ -210,7 +210,8 @@ fn running_cwds() -> Vec<String> {
         .collect()
 }
 
-pub fn scan(base: &Path, refresh: bool) -> Usage {
+/// The usage, and every session found (newest first, at most 50).
+pub fn scan(base: &Path, refresh: bool) -> (Usage, Vec<UsageSession>) {
     let mut u = Usage { harness: "claude".into(), name: "Claude Code".into(), ..Default::default() };
     let mut t = Tally::default();
     // A resumed or forked session copies earlier messages into a new transcript;
@@ -279,10 +280,10 @@ pub fn scan(base: &Path, refresh: bool) -> Usage {
     u.today.sessions = sessions.iter().filter(|s| t.is_today(&time::local_day(s.updated as f64))).count() as u64;
     u.totals.sessions = sessions.len() as u64;
     t.finish(&mut u);
-    sessions.truncate(10);
-    u.sessions = sessions;
+    sessions.truncate(super::HISTORY);
+    u.sessions = sessions.iter().take(10).cloned().collect();
     u.quota = quota::get("claude", refresh, 60.0, || fetch_quota(base));
-    u
+    (u, sessions)
 }
 
 /// The 5-hour, weekly and per-model weekly windows, with the OAuth token Claude
