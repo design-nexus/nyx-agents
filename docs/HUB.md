@@ -72,3 +72,13 @@ the hub. Deep links are the only action the feed offers.
 `qml/NyxAgentsService.qml` is a ready-made Quickshell service: it watches
 the file and exposes `running`, the counts, and `sessions`, plus
 `open(session)`.
+
+## Glimpse
+
+`apps/agents-glimpse` is a Glimpse plugin over the same file. Glimpse mounts
+only `hub.json` into its sandbox (as `$NYX_AGENTS_HUB`), never the runtime
+folder's sockets, and lets the plugin open only `nyx-agents://` links, which
+Nyx Agents handles (`nyx-agents://session/<id>[/subagent/<id>]`). Install
+installs it to `~/.local/share/nyx-agents/glimpse`; add it to Glimpse with
+`nyx-glimpse plugins install-local ~/.local/share/nyx-agents/glimpse` and
+enable it in Glimpse's plugin settings.

@@ -24,7 +24,8 @@ Status:
   Grok resume; five report their status. What each supports, and how it was
   checked, is in [docs/HARNESSES.md](docs/HARNESSES.md).
 
-Also: desktop notifications when an agent needs you or finishes (posted by
+Also: a Glimpse plugin (search `agents`, `agents needs`, or a session's
+title or folder; Enter opens it), desktop notifications when an agent needs you or finishes (posted by
 the manager, so the app can be closed), a Nyx Settings page, and sessions in
 their own git worktree (`--worktree`, or "In a new worktree" in New session).
 

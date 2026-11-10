@@ -1,0 +1,19 @@
+[package]
+name = "agents-glimpse"
+description = "Glimpse plugin: find agent sessions and open them in Nyx Agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "nyx-agents-glimpse"
+path = "src/main.rs"
+
+[dependencies]
+nyx-agents-proto = { path = "../../crates/nyx-agents-proto" }
+glimpse-plugin-sdk = { git = "https://github.com/design-nexus/nyx-glimpse.git", rev = "6f9f7325259bb05c2bc6a5eb1920ce6caed7aa82" }
+anyhow.workspace = true
+serde_json.workspace = true

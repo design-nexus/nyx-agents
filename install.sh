@@ -29,7 +29,7 @@ fi
 
 say "Building Nyx Agents"
 target=${CARGO_TARGET_DIR:-$src/target}
-(cd "$src" && cargo build --release --locked -p nyx-agentd -p nyx-agents)
+(cd "$src" && cargo build --release --locked -p nyx-agentd -p nyx-agents -p agents-glimpse)
 
 bin="$HOME/.local/bin"
 units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
@@ -48,6 +48,13 @@ if [[ -f $src/data/io.github.design_nexus.nyx.Agents.desktop ]]; then
   install -m 644 "$src/data/io.github.design_nexus.nyx.Agents.svg" "$icons/"
   command -v update-desktop-database >/dev/null && update-desktop-database -q "$apps" || true
 fi
+
+# The Glimpse plugin, for Glimpse to install with your consent:
+#   nyx-glimpse plugins install-local ~/.local/share/nyx-agents/glimpse
+plug="${XDG_DATA_HOME:-$HOME/.local/share}/nyx-agents/glimpse"
+mkdir -p "$plug"
+install -m 755 "$target/release/nyx-agents-glimpse" "$plug/nyx-agents-glimpse"
+install -m 644 "$src/apps/agents-glimpse/plugin.toml" "$plug/plugin.toml"
 
 ext="${XDG_DATA_HOME:-$HOME/.local/share}/nyx-settings/extensions/agents"
 mkdir -p "$ext"

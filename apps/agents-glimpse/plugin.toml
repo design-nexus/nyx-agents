@@ -1,0 +1,12 @@
+id = "nyx-agents"
+name = "Agents"
+version = "0.1.0"
+api_version = 1
+exec = ["./nyx-agents-glimpse"]
+capabilities = ["search", "preview"]
+description = "Find running coding-agent sessions and open them in Nyx Agents. Try agents, agents needs, or words from a title, folder or branch."
+
+[permissions]
+network = false
+selected_sources = false
+read = []

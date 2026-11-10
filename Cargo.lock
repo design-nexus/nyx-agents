@@ -3,6 +3,16 @@
 version = 4
 
 [[package]]
+name = "agents-glimpse"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "glimpse-plugin-sdk",
+ "nyx-agents-proto",
+ "serde_json",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -677,6 +687,16 @@ checksum = "99b38907e67e40dec9b60f858bcada952598719cb512a13eb13d6cdcd16f8295"
 dependencies = [
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "glimpse-plugin-sdk"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-glimpse.git?rev=6f9f7325259bb05c2bc6a5eb1920ce6caed7aa82#6f9f7325259bb05c2bc6a5eb1920ce6caed7aa82"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

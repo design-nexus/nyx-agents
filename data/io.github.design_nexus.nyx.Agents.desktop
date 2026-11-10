@@ -10,3 +10,4 @@ Categories=Development;
 Keywords=claude;codex;agent;ai;terminal;ghostty;
 StartupWMClass=io.github.design_nexus.nyx.Agents
 SingleMainWindow=true
+MimeType=x-scheme-handler/nyx-agents;

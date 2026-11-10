@@ -34,6 +34,10 @@ pub fn run() -> i32 {
         if let Some(target) = argv.windows(2).find(|w| w[0] == "--open").map(|w| w[1].clone()) {
             window::open_target(&target);
         }
+        // nyx-agents://session/ID[/subagent/ID], from Glimpse or a link.
+        if let Some(target) = argv.iter().find_map(|a| a.strip_prefix("nyx-agents://")) {
+            window::open_target(target.trim_end_matches('/'));
+        }
         glib::ExitCode::SUCCESS
     });
     app.connect_shutdown(|_| prefs::flush());
