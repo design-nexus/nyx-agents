@@ -73,7 +73,7 @@ const BUILTINS: &[Builtin] = &[
         mise: &["muse"],
         auth_files: &[],
         auth_env: &[],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
     Builtin {
         id: "grok",
