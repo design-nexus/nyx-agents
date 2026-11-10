@@ -80,8 +80,12 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
     let driving = gtk::Label::new(Some("You are driving: your pointer and keys go to the workspace"));
     driving.add_css_class("session-meta");
     driving.set_visible(false);
-    let take = gtk::ToggleButton::with_label("Take over");
-    take.set_tooltip_text(Some("Send your pointer and keys into the workspace. The agent can still act too."));
+    let take = gtk::ToggleButton::new();
+    take.set_icon_name("input-mouse-symbolic");
+    take.add_css_class("bar-button");
+    take.set_valign(gtk::Align::Center);
+    take.set_tooltip_text(Some("Take over: send your pointer and keys into the workspace (the agent can still act too)"));
+    take.update_property(&[gtk::accessible::Property::Label("Take over")]);
     header.end.append(&driving);
     header.end.append(&take);
 

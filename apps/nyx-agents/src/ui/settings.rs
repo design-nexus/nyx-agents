@@ -15,6 +15,7 @@ const GROUPS: &[(&str, &str, &str)] = &[
 pub const SHORTCUTS: &[(&[&str], &str)] = &[
     (&["Ctrl", "T"], "New session"),
     (&["Ctrl", "F"], "Find in the terminal"),
+    (&["Ctrl", "Shift", "F"], "Search sessions"),
     (&["Ctrl", "C"], "Copy the selection (interrupts the agent when nothing is selected)"),
     (&["Ctrl", "V"], "Paste"),
     (&["Ctrl", "Shift", "C"], "Copy"),

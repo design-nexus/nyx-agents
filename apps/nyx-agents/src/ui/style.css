@@ -55,7 +55,8 @@
 }
 
 .agents-window .new-session-list row {
-  padding: 6px 8px;
+  min-height: 30px;
+  padding: 2px 8px;
   border-radius: 7px;
 }
 

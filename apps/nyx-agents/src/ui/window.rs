@@ -24,6 +24,7 @@ struct Ui {
     tab_row: Rc<TabRow>,
     stack: gtk::Stack,
     new_button: gtk::MenuButton,
+    search: gtk::SearchEntry,
     new_list: gtk::ListBox,
     folder_label: gtk::Label,
     worktree_check: gtk::CheckButton,
@@ -347,6 +348,29 @@ fn build(app: &gtk::Application) {
         });
     }
     header.start.append(&collapse);
+    let search = gtk::SearchEntry::new();
+    search.set_placeholder_text(Some("Search sessions  (Ctrl+Shift+F)"));
+    search.add_css_class("bar-search");
+    search.set_width_chars(28);
+    search.update_property(&[gtk::accessible::Property::Label("Search sessions")]);
+    search.connect_search_changed(|_| refresh_sidebar());
+    search.connect_stop_search(|e| {
+        e.set_text("");
+        focus_active();
+    });
+    search.connect_activate(|e| {
+        // Enter opens the first match.
+        let q = e.text().to_lowercase();
+        let Some(ui) = cur() else { return };
+        let mut list: Vec<Session> = ui.sessions.borrow().values().filter(|s| matches(s, &q)).cloned().collect();
+        list.sort_by_key(rank);
+        if let Some(s) = list.first() {
+            let id = s.id.clone();
+            e.set_text("");
+            open_session(&id);
+        }
+    });
+    header.center.append(&search);
 
     let (new_button, new_list, folder_label, worktree_check, workspace_check) = new_session_menu();
     header.end.append(&new_button);
@@ -381,6 +405,7 @@ fn build(app: &gtk::Application) {
         tab_row,
         stack,
         new_button,
+        search,
         new_list,
         folder_label,
         worktree_check,
@@ -433,6 +458,9 @@ fn install_keys(window: &gtk::ApplicationWindow) {
         match key.to_lower() {
             gdk::Key::Escape if nyx_ui::settings_card::is_open() => nyx_ui::settings_card::escape(),
             gdk::Key::t if ctrl && !shift => ui.new_button.popup(),
+            gdk::Key::f if ctrl && shift => {
+                ui.search.grab_focus();
+            }
             gdk::Key::f if ctrl && !shift => {
                 if let Some(p) = active {
                     p.borrow().open_find();
@@ -552,6 +580,33 @@ fn status_icon(s: &Session) -> &'static str {
     }
 }
 
+/// A session matches a search by title, agent, folder or branch.
+fn matches(s: &Session, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    let branch = s.worktree.as_ref().and_then(|w| w.branch.as_deref()).unwrap_or_default();
+    [s.title.as_str(), s.harness.as_str(), s.cwd.as_str(), branch].iter().any(|f| f.to_lowercase().contains(query))
+}
+
+/// The agent's short name for the sidebar: "Claude" for Claude Code.
+fn agent_name(harnesses: &[Harness], id: &str) -> String {
+    harnesses
+        .iter()
+        .find(|h| h.id == id)
+        .and_then(|h| h.name.split_whitespace().next().map(String::from))
+        .unwrap_or_else(|| id.to_string())
+}
+
+/// Give the keyboard back to the session on screen.
+fn focus_active() {
+    if let Some(ui) = cur()
+        && let Some(p) = ui.pages.borrow().get(ui.active.get())
+    {
+        p.borrow().focus();
+    }
+}
+
 fn refresh_sidebar() {
     let Some(ui) = cur() else { return };
     let sb = &ui.sidebar;
@@ -560,7 +615,9 @@ fn refresh_sidebar() {
     // Terminals opened beside an agent belong to its tab; every other session is listed.
     let splits: std::collections::HashSet<String> =
         ui.pages.borrow().iter().filter_map(|p| p.borrow().split.as_ref().map(|(o, _)| o.borrow().id.clone())).collect();
-    let mut list: Vec<Session> = ui.sessions.borrow().values().filter(|s| !splits.contains(&s.id)).cloned().collect();
+    let query = ui.search.text().to_lowercase();
+    let mut list: Vec<Session> =
+        ui.sessions.borrow().values().filter(|s| !splits.contains(&s.id) && matches(s, &query)).cloned().collect();
     list.sort_by_key(rank);
     let live: Vec<&Session> = list.iter().filter(|s| matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting)).collect();
     let needs: Vec<&&Session> = live.iter().filter(|s| s.status.activity == Activity::Blocked).collect();
@@ -576,6 +633,16 @@ fn refresh_sidebar() {
             let branch = s.worktree.as_ref().and_then(|w| w.branch.clone()).map(|b| format!(" · {b}")).unwrap_or_default();
             let item = nyx_ui::sidebar::nav_item(status_icon(s), &s.title, &format!("{} · {state}{branch}", s.harness));
             item.set_active(active_id.as_deref() == Some(s.id.as_str()));
+            let agent = agent_name(&ui.harnesses.borrow(), &s.harness);
+            if s.harness != "shell"
+                && !s.title.to_lowercase().contains(&agent.to_lowercase())
+                && let Some(content) = item.button.child().and_downcast::<gtk::Box>()
+            {
+                let tag = gtk::Label::new(Some(&agent));
+                tag.add_css_class("nav-readout");
+                tag.add_css_class("compact-hide");
+                content.append(&tag);
+            }
             let id = s.id.clone();
             item.button.connect_clicked(move |_| open_session(&id));
             let id = s.id.clone();
@@ -594,7 +661,9 @@ fn refresh_sidebar() {
     let mut ended: Vec<&Session> =
         list.iter().filter(|s| !matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting)).collect();
     ended.sort_by_key(|s| std::cmp::Reverse(s.ended.unwrap_or(s.created)));
-    ended.truncate(8);
+    if query.is_empty() {
+        ended.truncate(8);
+    }
     group("Recent", ended, &mut first);
 
     // Projects: folders of past sessions, for starting another there.
@@ -642,6 +711,12 @@ fn refresh_sidebar() {
             });
             sb.append(&item.button);
         }
+    }
+    if !query.is_empty() && list.is_empty() {
+        let hint = gtk::Label::new(Some("No session matches"));
+        hint.add_css_class("dim-label");
+        hint.set_margin_start(12);
+        sb.append(&hint);
     }
     if !ui.connected.get() && ui.sessions.borrow().is_empty() {
         let hint = gtk::Label::new(Some("Connecting to the Nyx Agent Manager…"));
@@ -924,7 +999,13 @@ fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Label, gtk::CheckB
     content.append(&workspace);
     content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
     content.append(&heading("Agent"));
-    content.append(&list);
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_height(true)
+        .max_content_height(340)
+        .child(&list)
+        .build();
+    content.append(&scroll);
     let popover = gtk::Popover::new();
     popover.set_has_arrow(false);
     popover.add_css_class("menu-popover");
