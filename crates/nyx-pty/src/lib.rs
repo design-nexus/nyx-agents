@@ -43,6 +43,12 @@ fn cvt(r: libc::c_int) -> io::Result<libc::c_int> {
     if r < 0 { Err(io::Error::last_os_error()) } else { Ok(r) }
 }
 
+/// Resize through any handle on the master (for example a clone held by
+/// another thread).
+pub fn resize_master(master: &File, s: Size) -> io::Result<()> {
+    set_size(master.as_raw_fd(), s)
+}
+
 fn set_size(fd: RawFd, s: Size) -> io::Result<()> {
     let ws = libc::winsize { ws_row: s.rows.max(1), ws_col: s.cols.max(1), ws_xpixel: s.width_px, ws_ypixel: s.height_px };
     cvt(unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &ws) }).map(drop)

@@ -1,0 +1,10 @@
+[Unit]
+Description=Nyx Agent Manager socket (starts the manager on first use)
+
+[Socket]
+ListenStream=%t/nyx-agents/agents.sock
+SocketMode=0600
+DirectoryMode=0700
+
+[Install]
+WantedBy=sockets.target

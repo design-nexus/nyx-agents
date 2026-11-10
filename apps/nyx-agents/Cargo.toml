@@ -1,0 +1,20 @@
+[package]
+name = "nyx-agents"
+description = "Nyx Agents: AI coding agents in Ghostty-based terminals"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "nyx-agents"
+path = "src/main.rs"
+
+[dependencies]
+nyx-agents-proto = { path = "../../crates/nyx-agents-proto" }
+nyx-agents-core = { path = "../../crates/nyx-agents-core" }
+nyx-agents-client = { path = "../../crates/nyx-agents-client" }
+nyx-term.workspace = true
+libc.workspace = true
+serde_json.workspace = true

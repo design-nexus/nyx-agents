@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/ghostty-vt-sys", "crates/nyx-term", "crates/nyx-pty", "crates/nyx-term-gtk", "apps/term-lab"]
+members = ["crates/ghostty-vt-sys", "crates/nyx-term", "crates/nyx-pty", "crates/nyx-term-gtk", "crates/nyx-agents-proto", "crates/nyx-agents-core", "crates/nyx-agents-client", "apps/nyx-agentd", "apps/nyx-agents", "apps/term-lab"]
 
 [workspace.package]
 version = "0.1.0"

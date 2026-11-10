@@ -341,16 +341,23 @@ impl Terminal {
         self.format(GHOSTTY_FORMATTER_FORMAT_PLAIN, selection).map(|b| String::from_utf8_lossy(&b).into_owned())
     }
 
-    /// The screen as VT sequences that redraw it, with styles.
+    /// The screen as VT sequences that redraw it with styles, cursor and
+    /// links. Palette changes are left out so replaying it into another
+    /// terminal does not recolour that terminal.
     pub fn vt(&self) -> Result<Vec<u8>> {
         self.format(GHOSTTY_FORMATTER_FORMAT_VT, None)
     }
 
     fn format(&self, emit: GhosttyFormatterFormat, selection: Option<&Selection>) -> Result<Vec<u8>> {
+        let extras: GhosttyFormatterExtras =
+            GHOSTTY_FORMATTER_EXTRA_STYLE | GHOSTTY_FORMATTER_EXTRA_HYPERLINK | GHOSTTY_FORMATTER_EXTRA_CURSOR;
         let mut f: GhosttyFormatter = ptr::null_mut();
         check(unsafe { ghostty_formatter_terminal_new(ptr::null(), &mut f, self.raw) })?;
         let res = (|| unsafe {
             check(ghostty_formatter_set(f, GHOSTTY_FORMATTER_OPT_EMIT, ptr(&emit)))?;
+            if emit == GHOSTTY_FORMATTER_FORMAT_VT {
+                check(ghostty_formatter_set(f, GHOSTTY_FORMATTER_OPT_EXTRAS, ptr(&extras)))?;
+            }
             let unwrap = true;
             check(ghostty_formatter_set(f, GHOSTTY_FORMATTER_OPT_UNWRAP, ptr(&unwrap)))?;
             let trim = true;

@@ -160,3 +160,12 @@ fn selection_text() {
     let all = t.select_all().unwrap();
     assert_eq!(t.text(Some(&all)).unwrap(), "one two three");
 }
+
+#[test]
+fn vt_replay_leaves_the_palette_alone() {
+    let mut t = term(20, 3);
+    t.write(b"\x1b[31mred\x1b[0m text");
+    let vt = String::from_utf8(t.vt().unwrap()).unwrap();
+    assert!(!vt.contains("\x1b]4;"), "{vt:?}");
+    assert!(vt.contains("red") && vt.contains("text"));
+}

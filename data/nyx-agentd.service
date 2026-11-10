@@ -1,0 +1,16 @@
+[Unit]
+Description=Nyx Agent Manager (coding-agent sessions)
+Requires=nyx-agentd.socket
+After=nyx-agentd.socket
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/nyx-agentd serve
+Restart=on-failure
+RestartSec=2
+# Each agent runs under a holder process in its own session. Stopping or
+# restarting the manager ends only the manager; it reattaches on start.
+KillMode=process
+
+[Install]
+Also=nyx-agentd.socket
