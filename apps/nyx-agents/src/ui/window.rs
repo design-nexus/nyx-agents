@@ -721,7 +721,7 @@ fn fill_new_menu() {
     while let Some(c) = ui.new_list.first_child() {
         ui.new_list.remove(&c);
     }
-    let last = prefs::get().last_harness;
+    let last = crate::settings::default_harness().filter(|h| !h.is_empty()).unwrap_or_else(|| prefs::get().last_harness);
     let mut list: Vec<Harness> = ui.harnesses.borrow().iter().filter(|h| h.path.is_some()).cloned().collect();
     list.sort_by_key(|h| (h.id != last, h.id == "shell", h.name.clone()));
     for h in list {

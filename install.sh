@@ -49,6 +49,10 @@ if [[ -f $src/data/io.github.design_nexus.nyx.Agents.desktop ]]; then
   command -v update-desktop-database >/dev/null && update-desktop-database -q "$apps" || true
 fi
 
+ext="${XDG_DATA_HOME:-$HOME/.local/share}/nyx-settings/extensions/agents"
+mkdir -p "$ext"
+install -m 644 "$src/data/settings/extension.toml" "$ext/"
+
 if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
   systemctl --user daemon-reload
   if [[ -z ${NYX_AGENTS_NO_ENABLE:-} ]]; then

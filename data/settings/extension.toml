@@ -1,0 +1,7 @@
+id = "agents"
+name = "Agents"
+category = "Desktop"
+version = "0.1.0"
+description = "Coding agents: notifications, the default agent, and the agents installed on this computer."
+exec = "nyx-agents"
+args = ["settings"]

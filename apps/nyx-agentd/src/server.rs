@@ -93,7 +93,7 @@ impl Daemon {
             }
         }
         if before.lifecycle == Lifecycle::Running && after.lifecycle == Lifecycle::Exited {
-            let asked = self.stopping.lock().unwrap().iter().any(|s| *s == after.id);
+            let asked = self.stopping.lock().unwrap().contains(&after.id);
             if !asked && after.exit_code.is_some_and(|c| c != 0) && after.harness != "shell" {
                 let code = after.exit_code.unwrap_or_default();
                 n.send(&after.id, &format!("{who} ended unexpectedly"), &format!("{}\nExit code {code}", after.title), true);
