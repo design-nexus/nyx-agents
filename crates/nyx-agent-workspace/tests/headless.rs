@@ -3,8 +3,9 @@
 //!
 //!   cargo test -p nyx-agent-workspace --features headless-it -- --test-threads=1
 //!
-//! It checks the user's Hyprland focus and pointer before and after, and fails
-//! if either moved.
+//! It fails if the user's Hyprland focus changes or a window appears on the
+//! user's desktop. The pointer is only reported: the user moving the mouse
+//! would move it too.
 #![cfg(feature = "headless-it")]
 
 use std::path::PathBuf;
@@ -18,13 +19,18 @@ fn hyprctl(what: &str) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// The focused window's address and the pointer position on the user's desktop.
-fn user_desktop() -> (Option<String>, Option<String>) {
+/// The focused window and every window address on the user's desktop.
+fn user_desktop() -> (Option<String>, Vec<String>) {
     let focus = hyprctl("activewindow").and_then(|j| {
         let v: serde_json::Value = serde_json::from_str(&j).ok()?;
         v["address"].as_str().map(String::from)
     });
-    (focus, hyprctl("cursorpos"))
+    let mut windows: Vec<String> = hyprctl("clients")
+        .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).ok())
+        .and_then(|v| v.as_array().map(|a| a.iter().filter_map(|w| w["address"].as_str().map(String::from)).collect()))
+        .unwrap_or_default();
+    windows.sort();
+    (focus, windows)
 }
 
 fn scratch() -> (PathBuf, PathBuf) {
@@ -35,6 +41,7 @@ fn scratch() -> (PathBuf, PathBuf) {
 #[test]
 fn a_workspace_runs_foot_and_takes_input() {
     let before = user_desktop();
+    let pointer_before = hyprctl("cursorpos");
     let (runtime, data) = scratch();
     let ws = Instance::start("it", &runtime, &data, Options::default()).expect("sway starts headless");
     assert!(ws.alive());
@@ -71,9 +78,15 @@ fn a_workspace_runs_foot_and_takes_input() {
     let frame = cap.capture().unwrap();
     assert_eq!((frame.width, frame.height), (1024, 768));
 
+    drop(cap);
+    drop(input);
     ws.stop();
     assert!(!ws.alive());
     assert!(!ws.dir.exists(), "the workspace folder is removed");
     let _ = std::fs::remove_dir_all(runtime.parent().unwrap());
-    assert_eq!(user_desktop(), before, "the user's focus or pointer changed");
+    eprintln!("pointer before {:?}, after {:?}", pointer_before, hyprctl("cursorpos"));
+    let after = user_desktop();
+    assert_eq!(after.0, before.0, "the user's focus changed");
+    let new: Vec<&String> = after.1.iter().filter(|w| !before.1.contains(w)).collect();
+    assert!(new.is_empty(), "windows appeared on the user's desktop: {new:?}");
 }
