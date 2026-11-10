@@ -437,6 +437,9 @@ pub struct UsageSession {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Quota {
+    /// The agent's provider reports a quota that can be checked.
+    #[serde(default)]
+    pub available: bool,
     /// The user turned quota checks on for this agent (`[usage] quotas`).
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]

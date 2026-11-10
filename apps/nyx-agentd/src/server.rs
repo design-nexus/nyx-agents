@@ -395,8 +395,9 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
         | Call::CaptureWorkspace { .. }
         | Call::WorkspaceInput { .. }) => crate::workspaces::handle(d, c)?,
         Call::ListUsage { refresh } => {
-            if refresh || d.usage.lock().unwrap().is_empty() {
-                for a in usage::AGENTS {
+            // Every agent once, so the first answer after a start isn't partial.
+            for a in usage::AGENTS {
+                if refresh || !d.history.lock().unwrap().contains_key(*a) {
                     d.scan_usage(a, refresh);
                 }
             }

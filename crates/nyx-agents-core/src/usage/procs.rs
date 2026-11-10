@@ -8,6 +8,11 @@ pub struct Proc {
 
 /// Live (not zombie) processes whose executable name is `comm`, other than this one.
 pub fn named(comm: &str) -> Vec<Proc> {
+    matching(|c| c == comm)
+}
+
+/// Live processes whose executable name passes `want`, other than this one.
+pub fn matching(want: impl Fn(&str) -> bool) -> Vec<Proc> {
     let me = std::process::id() as i32;
     let Ok(dir) = std::fs::read_dir("/proc") else { return vec![] };
     let mut out = vec![];
@@ -17,7 +22,7 @@ pub fn named(comm: &str) -> Vec<Proc> {
             continue;
         }
         let p = e.path();
-        if std::fs::read_to_string(p.join("comm")).ok().as_deref().map(str::trim) != Some(comm) {
+        if !std::fs::read_to_string(p.join("comm")).is_ok_and(|c| want(c.trim())) {
             continue;
         }
         // State follows the parenthesised name, which may itself hold ") ".

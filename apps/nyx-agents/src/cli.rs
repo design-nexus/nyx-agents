@@ -330,7 +330,7 @@ fn print_usage(list: &[Usage], json: bool) -> Result<(), Box<dyn std::error::Err
         }
         match (&u.quota.error, u.quota.enabled) {
             (Some(e), _) => println!("  quota    {e}"),
-            (None, false) => println!("  quota    off (add \"{}\" to [usage] quotas in config.toml)", u.harness),
+            (None, false) if u.quota.available => println!("  quota    off (add \"{}\" to [usage] quotas in config.toml)", u.harness),
             _ => {}
         }
     }

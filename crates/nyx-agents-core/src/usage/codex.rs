@@ -152,7 +152,7 @@ fn running() -> (Vec<String>, Vec<String>) {
     (ids, cwds)
 }
 
-fn find_uuid(s: &str) -> Option<String> {
+pub(crate) fn find_uuid(s: &str) -> Option<String> {
     let b = s.as_bytes();
     let shape = [8, 4, 4, 4, 12];
     (0..b.len()).find_map(|start| {

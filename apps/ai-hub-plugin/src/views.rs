@@ -411,6 +411,9 @@ fn meter(w: &QuotaWindow, margin: [i32; 4]) -> Node {
 
 fn usage_line(u: &Usage) -> String {
     let mut parts = vec![];
+    if !u.quota.available {
+        parts.push("No quota".to_string());
+    }
     if let Some(p) = &u.quota.plan {
         parts.push(p.clone());
     }
@@ -454,7 +457,7 @@ fn usage_tab(st: &State) -> Node {
     if st.usage.is_empty() {
         out.push(card([dim("No agent has records yet.").margin(10, 12, 10, 12)]));
     }
-    let off: Vec<String> = st.usage.iter().filter(|u| !u.quota.enabled).map(|u| u.name.split(' ').next().unwrap_or(&u.name).to_string()).collect();
+    let off: Vec<String> = st.usage.iter().filter(|u| u.quota.available && !u.quota.enabled).map(|u| u.name.split(' ').next().unwrap_or(&u.name).to_string()).collect();
     out.push(label("Last used first").class("foot"));
     if !off.is_empty() {
         out.push(label(format!("Quota checks are off for {}.", off.join(", "))).class("foot"));
@@ -534,7 +537,9 @@ fn agent_page(st: &State, h: &str) -> Node {
         .margin(0, 6, 10, 6),
     ]));
     let mut quota = vec![card_head("Quotas", u.quota.plan.iter().map(|p| dim(p.clone())).collect())];
-    if !u.quota.enabled {
+    if !u.quota.available {
+        quota.push(dim(format!("{} reports no quota.", u.name)).margin(0, 12, 10, 12));
+    } else if !u.quota.enabled {
         quota.push(dim("Off. To check it with its own sign-in, add").margin(0, 12, 0, 12));
         quota.push(label(format!("[usage] quotas = [\"{h}\"]")).class("transcript").margin(2, 12, 0, 12));
         quota.push(dim("to ~/.config/nyx-agents/config.toml.").margin(2, 12, 10, 12));

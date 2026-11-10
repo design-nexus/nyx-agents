@@ -46,7 +46,7 @@ pub type Fetched = Result<(Option<String>, Vec<QuotaWindow>), String>;
 /// else from `fetch`.
 pub fn get(agent: &str, refresh: bool, max_age: f64, fetch: impl FnOnce() -> Fetched) -> Quota {
     if !enabled(agent) {
-        return Quota::default();
+        return Quota { available: true, ..Default::default() };
     }
     let dir = super::cache_dir(agent);
     let cache_path = dir.join("quota.json");
@@ -59,7 +59,7 @@ pub fn get(agent: &str, refresh: bool, max_age: f64, fetch: impl FnOnce() -> Fet
         let c = c.unwrap_or_default();
         let mut windows = c.windows;
         windows.iter_mut().for_each(|w| pace(w, t));
-        Quota { enabled: true, plan: c.plan, windows, error, updated: (c.at > 0.0).then_some(c.at as u64) }
+        Quota { available: true, enabled: true, plan: c.plan, windows, error, updated: (c.at > 0.0).then_some(c.at as u64) }
     };
     if !refresh {
         if let Some(c) = cached.as_ref().filter(|c| t - c.at < max_age && !c.windows.is_empty()) {

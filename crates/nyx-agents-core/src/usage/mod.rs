@@ -3,8 +3,13 @@
 //! (see `quota`). Records are read incrementally (see `logcache`), so a rescan
 //! costs only what was written since the last one.
 
+pub mod antigravity;
 pub mod claude;
 pub mod codex;
+pub mod cursor;
+pub mod grok;
+pub mod local;
+pub mod muse;
 pub mod logcache;
 pub mod procs;
 pub mod quota;
@@ -16,7 +21,7 @@ use std::path::PathBuf;
 use nyx_agents_proto::{ModelUsage, ToolUsage, Usage, UsageDay, UsageSession};
 
 /// The agents with a usage scanner.
-pub const AGENTS: &[&str] = &["claude", "codex"];
+pub const AGENTS: &[&str] = &["claude", "codex", "grok", "cursor", "antigravity", "muse", "opencode", "omp", "hermes", "crush"];
 
 /// Past sessions kept per agent for the session history.
 pub const HISTORY: usize = 50;
@@ -36,6 +41,14 @@ pub fn scan_with_history(agent: &str, refresh: bool) -> Option<(Usage, Vec<Usage
     let (mut u, history) = match agent {
         "claude" => claude::scan(&claude::base(), refresh),
         "codex" => codex::scan(&codex::base(), refresh),
+        "grok" => grok::scan(&grok::base(), refresh),
+        "cursor" => cursor::scan(&cursor::data_home(), &cursor::config_home(), refresh),
+        "muse" => muse::scan(&muse::base(), refresh),
+        "antigravity" => antigravity::scan(&antigravity::base(), refresh),
+        "opencode" => local::opencode(refresh),
+        "omp" => local::omp(refresh),
+        "hermes" => local::hermes(refresh),
+        "crush" => local::crush(refresh),
         _ => return None,
     };
     u.updated = time::now() as u64;
