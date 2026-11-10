@@ -23,6 +23,10 @@ Status:
 - **Phase 3 (first round).** All ten harnesses launch and run; Codex and
   Grok resume; five report their status. What each supports, and how it was
   checked, is in [docs/HARNESSES.md](docs/HARNESSES.md).
+- **Agent workspaces (first round).** A session can get a desktop of its own
+  (a headless sway the manager runs) and computer-use tools to drive it; the
+  app shows it live and can take over. Claude Code and Codex are wired. See
+  [docs/WORKSPACES.md](docs/WORKSPACES.md). Needs sway.
 
 Also: a Glimpse plugin (search `agents`, `agents needs`, or a session's
 title or folder; Enter opens it), desktop notifications when an agent needs you or finishes (posted by
@@ -43,6 +47,8 @@ nyx-agents attach 03c6           # Ctrl+] detaches; the agent keeps running
 nyx-agents attach 03c6 --observe # read-only
 nyx-agents stop 03c6 | resume 03c6 | forget 03c6
 nyx-agents hub --watch           # the AI Hub feed
+nyx-agents launch claude --workspace new   # with a desktop of its own
+nyx-agents workspaces            # agent workspaces; --open workspace/ID shows one
 ```
 
 `tools/daemon-smoke.sh` checks the manager end to end with scratch folders
@@ -69,6 +75,7 @@ Needs Rust 1.95+, Zig 0.17, GTK 4.18+ and clang (for bindgen).
 - `crates/nyx-agents-proto`: the manager's wire protocol
 - `crates/nyx-agents-core`: harness adapters and discovery, records, git, hub
 - `crates/nyx-agents-client`: client library
+- `crates/nyx-agent-workspace`: agent workspaces (headless sway, input, capture)
 - `apps/nyx-agentd`: the manager and session holders
 - `apps/nyx-agents`: the command line (and, next, the app)
 - `apps/term-lab`: prototype window and benchmarks

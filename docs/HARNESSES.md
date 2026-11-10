@@ -27,6 +27,11 @@ checked on this machine (SQLite queries were also run read-only against the
 real databases; Muse and Hermes share that path but were not simulated); Grok's flags were checked against `grok --help`; Claude's
 was tested for real.
 
+**Agent workspaces** (computer-use tools, see WORKSPACES.md): Claude Code
+(`--mcp-config`) and Codex (`-c mcp_servers.nyx_computer.*`) get them for a
+session with a workspace. The others are not wired yet; any harness that
+takes stdio MCP servers can run `nyx-agents computer --workspace ID`.
+
 Not yet integrated, with what is known:
 
 - **Crush**: `-s <id>`; ids from `crush session list --json`.

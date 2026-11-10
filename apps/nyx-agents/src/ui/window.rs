@@ -63,8 +63,13 @@ pub fn present(app: &gtk::Application) {
 }
 
 /// `--open session/ID[/subagent/ID]`: show that session (ID may be a prefix).
+/// `--open workspace/ID`: show that agent workspace's live view.
 pub fn open_target(target: &str) {
     let parts: Vec<&str> = target.split('/').collect();
+    if let ["workspace", id] = parts.as_slice() {
+        show_workspace(id);
+        return;
+    }
     let sub = match parts.as_slice() {
         ["session", _, "subagent", sub] => Some(sub.to_string()),
         _ => None,
@@ -92,6 +97,11 @@ pub fn open_target(target: &str) {
         [] => toast("That session no longer exists"),
         _ => toast("That id matches more than one session"),
     }
+}
+
+fn show_workspace(id: &str) {
+    let parent = cur().map(|ui| ui.window.clone().upcast::<gtk::Window>());
+    super::workspace::open(id, parent, toast);
 }
 
 fn actions() -> Rc<Actions> {
@@ -132,6 +142,7 @@ fn actions() -> Rc<Actions> {
         }),
         split: Rc::new(split),
         unsplit: Rc::new(unsplit),
+        show_workspace: Rc::new(show_workspace),
         open_git: Rc::new(|id| {
             let Some(ui) = cur() else { return };
             let Some(root) = ui.sessions.borrow().get(id).and_then(|s| s.worktree.as_ref().map(|w| w.root.clone())) else {
@@ -355,6 +366,8 @@ fn on_msg(m: Msg) {
             *ui.harnesses.borrow_mut() = harnesses;
             fill_new_menu();
         }
+        Msg::Event(Event::Workspace { workspace }) => super::workspace::changed(&workspace),
+        Msg::Event(Event::WorkspaceRemoved { id }) => super::workspace::removed(&id),
         Msg::Disconnected(why) => {
             if ui.connected.replace(false) {
                 toast("Lost the Nyx Agent Manager; reconnecting…");

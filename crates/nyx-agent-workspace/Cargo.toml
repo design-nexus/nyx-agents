@@ -1,0 +1,22 @@
+[package]
+name = "nyx-agent-workspace"
+description = "Agent workspaces: isolated headless sway sessions an agent drives with its own pointer and keyboard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+# Starts a real headless sway in its tests. Off by default: run it only on purpose.
+headless-it = []
+
+[dependencies]
+nyx-agents-proto = { path = "../nyx-agents-proto" }
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+png = "0.18"

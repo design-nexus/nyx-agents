@@ -36,6 +36,7 @@ pub struct Page {
     pill: gtk::Label,
     stop: gtk::Button,
     git: gtk::Button,
+    workspace: gtk::Button,
     split_right: gtk::Button,
     split_down: gtk::Button,
     find_bar: gtk::Revealer,
@@ -60,6 +61,8 @@ pub struct Actions {
     pub split: SplitFn,
     pub unsplit: IdFn,
     pub open_git: IdFn,
+    /// Show an agent workspace's live view.
+    pub show_workspace: IdFn,
     pub remove_worktree: IdFn,
     /// A pane's session ended or its holder went away.
     pub ended: IdFn,
@@ -234,6 +237,7 @@ impl Page {
         let split_right = button("view-dual-symbolic", "Open a terminal beside the agent (Ctrl+Shift+O)");
         let split_down = button("view-paged-symbolic", "Open a terminal below the agent (Ctrl+Shift+E)");
         let git = button("folder-git", "Open this repository in Nyx Git");
+        let workspace = button("video-display-symbolic", "Show the agent's workspace");
         let stop = button("media-playback-stop-symbolic", "Stop the agent");
         for w in [title.upcast_ref::<gtk::Widget>(), pill.upcast_ref(), meta.upcast_ref(), find.upcast_ref()] {
             bar.append(w);
@@ -241,6 +245,7 @@ impl Page {
         bar.append(&split_right);
         bar.append(&split_down);
         bar.append(&git);
+        bar.append(&workspace);
         bar.append(&stop);
         root.append(&bar);
 
@@ -280,6 +285,10 @@ impl Page {
         let id = s.id.clone();
         let act = a.open_git.clone();
         git.connect_clicked(move |_| act(&id));
+        if let Some(w) = s.workspace.clone() {
+            let act = a.show_workspace.clone();
+            workspace.connect_clicked(move |_| act(&w));
+        }
         let id = s.id.clone();
         let act = a.split.clone();
         split_right.connect_clicked(move |_| act(&id, false));
@@ -295,6 +304,7 @@ impl Page {
             pill,
             stop,
             git,
+            workspace,
             split_right,
             split_down,
             find_bar,
@@ -397,6 +407,7 @@ impl Page {
         let live = matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting);
         self.stop.set_visible(live);
         self.git.set_visible(s.worktree.is_some());
+        self.workspace.set_visible(s.workspace.is_some());
         self.split_right.set_visible(self.split.is_none());
         self.split_down.set_visible(self.split.is_none());
         self.inspector.update(s, (a.subagent_source)(&s.harness));

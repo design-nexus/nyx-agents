@@ -206,15 +206,137 @@ pub struct Project {
     pub path: String,
 }
 
-/// A group of sessions shown together. Maps to a Hyprland agent workspace
-/// once that API exists; it is never a security boundary.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// A desktop of its own where agents open and drive GUI programs: a headless
+/// sway run by the manager (see docs/WORKSPACES.md). Never a security
+/// boundary: programs in it run as the user.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AgentWorkspace {
     pub id: WorkspaceId,
     pub name: String,
     pub sessions: Vec<SessionId>,
-    /// Opaque handle of the compositor's agent workspace, when linked.
+    /// The compositor behind it: `sway:<absolute Wayland socket path>`.
+    /// Private to the user.
     pub compositor: Option<String>,
+    #[serde(default)]
+    pub state: WorkspaceState,
+    /// Output size in pixels, and its scale.
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
+    #[serde(default = "one")]
+    pub scale: f64,
+    #[serde(default)]
+    pub created: Millis,
+    /// Windows open in it, and the focused one's title (sanitised).
+    #[serde(default)]
+    pub windows: usize,
+    #[serde(default)]
+    pub focused: Option<String>,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WorkspaceState {
+    #[default]
+    Running,
+    /// Its compositor ended; the record goes once its sessions are gone.
+    Ended,
+}
+
+impl AgentWorkspace {
+    /// The Wayland socket of a sway-backed workspace.
+    pub fn wayland_socket(&self) -> Option<&str> {
+        self.compositor.as_deref()?.strip_prefix("sway:")
+    }
+}
+
+/// A window inside an agent workspace.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceWindow {
+    /// The compositor's id for it (sway's container id).
+    pub id: i64,
+    pub app_id: Option<String>,
+    pub title: String,
+    pub pid: Option<u32>,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub focused: bool,
+    pub floating: bool,
+}
+
+/// One step of pointer or keyboard input in an agent workspace. Coordinates
+/// are logical pixels from the top left, as in a screenshot at scale 1.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "kebab-case")]
+pub enum InputAction {
+    Move {
+        x: i32,
+        y: i32,
+    },
+    /// Click at the pointer, or at `x`, `y`. `button`: left (default), right, middle.
+    Click {
+        #[serde(default)]
+        x: Option<i32>,
+        #[serde(default)]
+        y: Option<i32>,
+        #[serde(default)]
+        button: Option<String>,
+        /// 1 to 3 (a double click is 2).
+        #[serde(default)]
+        count: Option<u32>,
+    },
+    /// Press or release one button, for drags driven step by step.
+    Button {
+        #[serde(default)]
+        button: Option<String>,
+        pressed: bool,
+    },
+    Drag {
+        from_x: i32,
+        from_y: i32,
+        to_x: i32,
+        to_y: i32,
+        #[serde(default)]
+        button: Option<String>,
+    },
+    /// Wheel clicks: positive `dy` scrolls down, positive `dx` right.
+    Scroll {
+        #[serde(default)]
+        x: Option<i32>,
+        #[serde(default)]
+        y: Option<i32>,
+        #[serde(default)]
+        dx: i32,
+        #[serde(default)]
+        dy: i32,
+    },
+    Type {
+        text: String,
+    },
+    /// A combo such as `ctrl+l`, `Return` or `alt+F4`.
+    Key {
+        combo: String,
+    },
+    /// Pause, up to 5 seconds.
+    Wait {
+        ms: u64,
+    },
+}
+
+/// A capture of an agent workspace.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Screenshot {
+    pub width: u32,
+    pub height: u32,
+    /// Base64 PNG.
+    pub png: String,
 }
 
 // ---------- Control requests ----------
@@ -281,6 +403,66 @@ pub enum Call {
     ListProjects,
     #[serde(rename = "workspaces.list")]
     ListWorkspaces,
+    #[serde(rename = "workspaces.get")]
+    GetWorkspace {
+        id: WorkspaceId,
+    },
+    /// Start a new agent workspace (default 1280×800 at scale 1).
+    #[serde(rename = "workspaces.create")]
+    CreateWorkspace {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        width: Option<u32>,
+        #[serde(default)]
+        height: Option<u32>,
+        #[serde(default)]
+        scale: Option<f64>,
+    },
+    /// End a workspace and everything running in it.
+    #[serde(rename = "workspaces.remove")]
+    RemoveWorkspace {
+        id: WorkspaceId,
+    },
+    #[serde(rename = "workspaces.resize")]
+    ResizeWorkspace {
+        id: WorkspaceId,
+        width: u32,
+        height: u32,
+        #[serde(default)]
+        scale: Option<f64>,
+    },
+    /// Start a program in a workspace from an argv (never a shell string).
+    #[serde(rename = "workspaces.launch")]
+    LaunchInWorkspace {
+        id: WorkspaceId,
+        argv: Vec<String>,
+        #[serde(default)]
+        cwd: Option<String>,
+    },
+    #[serde(rename = "workspaces.windows")]
+    WorkspaceWindows {
+        id: WorkspaceId,
+    },
+    #[serde(rename = "workspaces.focus_window")]
+    FocusWindow {
+        id: WorkspaceId,
+        window: i64,
+    },
+    /// A PNG of the workspace at logical size, shrunk to fit the maximums.
+    #[serde(rename = "workspaces.screenshot")]
+    CaptureWorkspace {
+        id: WorkspaceId,
+        #[serde(default)]
+        max_width: Option<u32>,
+        #[serde(default)]
+        max_height: Option<u32>,
+    },
+    #[serde(rename = "workspaces.input")]
+    WorkspaceInput {
+        id: WorkspaceId,
+        actions: Vec<InputAction>,
+    },
     #[serde(rename = "events.subscribe")]
     Subscribe,
 }
@@ -294,6 +476,8 @@ pub struct Launch {
     pub args: Vec<String>,
     #[serde(default)]
     pub title: Option<String>,
+    /// An agent workspace to work in, or `"new"` to start one. The agent
+    /// gets the `nyx-agents computer` tools for it.
     #[serde(default)]
     pub workspace: Option<WorkspaceId>,
     /// Start in a new git worktree of the folder's repository, on a new
@@ -332,9 +516,22 @@ pub struct RpcError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "kebab-case")]
 pub enum Event {
-    Session { session: Box<Session> },
-    Removed { id: SessionId },
-    Harnesses { harnesses: Vec<Harness> },
+    Session {
+        session: Box<Session>,
+    },
+    Removed {
+        id: SessionId,
+    },
+    Harnesses {
+        harnesses: Vec<Harness>,
+    },
+    /// A workspace was created or changed.
+    Workspace {
+        workspace: Box<AgentWorkspace>,
+    },
+    WorkspaceRemoved {
+        id: WorkspaceId,
+    },
 }
 
 /// A line from the daemon: a response or an event.
@@ -507,6 +704,37 @@ mod tests {
         write_frame(&mut buf, FrameKind::Output, b"hello").unwrap();
         let (k, p) = read_frame(&mut buf.as_slice()).unwrap();
         assert_eq!((FrameKind::from_u8(k), p.as_slice()), (Some(FrameKind::Output), &b"hello"[..]));
+    }
+
+    #[test]
+    fn workspace_calls_round_trip() {
+        let r: Request = serde_json::from_str(
+            r#"{"id":2,"method":"workspaces.input","params":{"id":"w1","actions":[
+                {"action":"click","x":10,"y":20},{"action":"type","text":"hi"},{"action":"key","combo":"ctrl+l"}]}}"#,
+        )
+        .unwrap();
+        let Call::WorkspaceInput { id, actions } = r.call else { panic!("wrong call") };
+        assert_eq!(id, "w1");
+        assert_eq!(actions[0], InputAction::Click { x: Some(10), y: Some(20), button: None, count: None });
+        assert_eq!(actions[2], InputAction::Key { combo: "ctrl+l".into() });
+        let r: Request = serde_json::from_str(r#"{"id":3,"method":"workspaces.create","params":{}}"#).unwrap();
+        assert!(matches!(r.call, Call::CreateWorkspace { width: None, .. }));
+        let s = serde_json::to_string(&Request {
+            id: 4,
+            call: Call::LaunchInWorkspace { id: "w1".into(), argv: vec!["foot".into()], cwd: None },
+        })
+        .unwrap();
+        assert!(s.contains(r#""method":"workspaces.launch""#), "{s}");
+    }
+
+    #[test]
+    fn workspaces_name_their_socket() {
+        let w: AgentWorkspace =
+            serde_json::from_str(r#"{"id":"w","name":"W","sessions":[],"compositor":"sway:/run/x/wayland-0"}"#).unwrap();
+        assert_eq!(w.wayland_socket(), Some("/run/x/wayland-0"));
+        assert_eq!((w.state, w.scale), (WorkspaceState::Running, 1.0));
+        let e: Incoming = serde_json::from_str(r#"{"event":"workspace-removed","id":"w"}"#).unwrap();
+        assert!(matches!(e, Incoming::Event(Event::WorkspaceRemoved { .. })));
     }
 
     #[test]

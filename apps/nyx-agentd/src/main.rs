@@ -15,6 +15,7 @@ mod holder;
 mod notify;
 mod peer;
 mod server;
+mod workspaces;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

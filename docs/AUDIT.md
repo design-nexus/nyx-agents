@@ -7,9 +7,9 @@ Confirmed findings that shape Nyx Agents. Paths are under `~/Projects`.
 - **No Nyx Agents code existed.** The Hyprland workspace-name prefix
   `nyx-agent` is already reserved and hidden by the switcher, dock and
   desktop (`nyx-switcher/crates/nyx-switcher-core/src/model.rs`,
-  `nyx-core/crates/nyx-desktop/src/model.rs`). Agent workspaces themselves are
-  being built into Hyprland in a separate effort; Nyx Agents will use that API
-  when it lands.
+  `nyx-core/crates/nyx-desktop/src/model.rs`). Agent workspaces turned out
+  not to be Hyprland workspaces: each is a headless sway the manager runs
+  (see WORKSPACES.md), so that prefix stays reserved but unused.
 - **Design 2.0**: `nyx_theme::use_design_2()` + `nyx_theme::install(Style)`,
   widgets from `nyx-design/crates/nyx-ui`, rules in `nyx-design/STYLE.md`.
   Theme Engine 2.0 is `io.github.design_nexus.nyx.Theme1`; Catppuccin Mocha

@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 nyx-agents-proto = { path = "../../crates/nyx-agents-proto" }
 nyx-agents-core = { path = "../../crates/nyx-agents-core" }
+nyx-agent-workspace = { path = "../../crates/nyx-agent-workspace" }
 nyx-term.workspace = true
 nyx-pty.workspace = true
 libc.workspace = true

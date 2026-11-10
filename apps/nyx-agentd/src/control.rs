@@ -19,7 +19,8 @@ fn tools() -> Value {
         {"name": "agents.list_harnesses", "description": "Coding-agent harnesses Nyx Agents knows: installed or not, version, integration tier and supported capabilities.", "inputSchema": {"type": "object", "properties": {}}, "annotations": read},
         {"name": "agents.list_sessions", "description": "Agent sessions: harness, title, folder, branch, whether running, what the agent reports doing (working, blocked, done), turn count.", "inputSchema": {"type": "object", "properties": {}}, "annotations": read},
         {"name": "agents.session_status", "description": "One agent session in full, including its status message and subagents.", "inputSchema": id, "annotations": read},
-        {"name": "agents.list_workspaces", "description": "Agent workspaces (groups of sessions shown together).", "inputSchema": {"type": "object", "properties": {}}, "annotations": read},
+        {"name": "agents.list_workspaces", "description": "Agent workspaces: desktops of their own where agents open and drive GUI programs. Each lists its sessions, size, window count and focused window.", "inputSchema": {"type": "object", "properties": {}}, "annotations": read},
+        {"name": "agents.open_workspace", "description": "Show an agent workspace's live view in the Nyx Agents window.", "inputSchema": id, "annotations": {"readOnlyHint": false, "destructiveHint": false}},
         {"name": "agents.open_session", "description": "Show an agent session in the Nyx Agents window (optionally one of its subagents).", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "subagent": {"type": "string"}}, "required": ["id"]}, "annotations": {"readOnlyHint": false, "destructiveHint": false}},
     ])
 }
@@ -54,6 +55,19 @@ impl Control {
             "agents.list_sessions" => Call::ListSessions,
             "agents.session_status" => Call::GetSession { id: id()? },
             "agents.list_workspaces" => Call::ListWorkspaces,
+            "agents.open_workspace" => {
+                let id = id()?;
+                if !nyx_agents_core::store::valid_id(&id) || !self.d.workspaces.exists(&id) {
+                    return Err("no such workspace".into());
+                }
+                let target = format!("workspace/{id}");
+                std::process::Command::new("nyx-agents")
+                    .args(["--open", &target])
+                    .stdin(std::process::Stdio::null())
+                    .spawn()
+                    .map_err(|e| format!("cannot open Nyx Agents: {e}"))?;
+                return Ok(json!({ "opened": target }));
+            }
             "agents.open_session" => {
                 let id = id()?;
                 if !nyx_agents_core::store::valid_id(&id) {

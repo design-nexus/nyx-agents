@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use nyx_agents_client::{Attachment, Client, FrameKind};
-use nyx_agents_proto::{Activity, AttachMode, Launch, Lifecycle, ResizeMsg, Session, now_ms};
+use nyx_agents_proto::{Activity, AgentWorkspace, AttachMode, Call, Launch, Lifecycle, ResizeMsg, Session, now_ms};
 use nyx_term::{Terminal, TerminalOptions};
 
 fn flag(args: &[String], name: &str) -> bool {
@@ -18,7 +18,7 @@ fn positional(args: &[String]) -> Option<&str> {
 
 pub fn run(args: &[String]) -> i32 {
     let Some(cmd) = args.first().map(String::as_str) else {
-        eprintln!("usage: nyx-agents harnesses|ls|status|launch|attach|resume|stop|forget|hub (see --help)");
+        eprintln!("usage: nyx-agents harnesses|ls|status|launch|attach|resume|stop|forget|workspaces|hub (see --help)");
         return 2;
     };
     if matches!(cmd, "-h" | "--help" | "help") {
@@ -26,8 +26,7 @@ pub fn run(args: &[String]) -> i32 {
             "{}",
             include_str!("main.rs")
                 .lines()
-                .skip(2)
-                .take(9)
+                .filter(|l| l.starts_with("//!   nyx-agents"))
                 .map(|l| format!("{}\n", l.trim_start_matches("//!")))
                 .collect::<String>()
         );
@@ -111,7 +110,7 @@ pub fn run(args: &[String]) -> i32 {
                     cwd,
                     args: rest,
                     title: opt(args, "--title").map(String::from),
-                    workspace: None,
+                    workspace: opt(args, "--workspace").map(String::from),
                     // --worktree [NAME]: a new worktree, named or not.
                     worktree: args
                         .iter()
@@ -139,6 +138,7 @@ pub fn run(args: &[String]) -> i32 {
                 let id = c.resolve(positional(args).ok_or("forget needs a session id")?)?;
                 c.forget(&id)?;
             }
+            "workspaces" => return workspaces(&mut c, args, json),
             "hub" => {
                 let path = nyx_agents_core::paths::hub_file();
                 let print = || {
@@ -170,6 +170,58 @@ pub fn run(args: &[String]) -> i32 {
             1
         }
     }
+}
+
+/// `workspaces [--json]`, `workspaces new [--name N] [--size WxH]`, `workspaces rm ID`.
+fn workspaces(c: &mut Client, args: &[String], json: bool) -> Result<i32, Box<dyn std::error::Error>> {
+    match args.get(1).map(String::as_str) {
+        None | Some("ls" | "--json") => {
+            let list: Vec<AgentWorkspace> = c.call(Call::ListWorkspaces)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&list)?);
+            } else if list.is_empty() {
+                println!("No agent workspaces.");
+            }
+            for w in list.iter().filter(|_| !json) {
+                let state = format!("{:?}", w.state).to_lowercase();
+                let focused = w.focused.as_deref().map(|f| format!("  [{f}]")).unwrap_or_default();
+                println!(
+                    "{}  {:<20} {}x{} {:<8} {} windows, {} sessions{focused}",
+                    &w.id[..8.min(w.id.len())],
+                    w.name,
+                    w.width,
+                    w.height,
+                    state,
+                    w.windows,
+                    w.sessions.len()
+                );
+            }
+        }
+        Some("new") => {
+            let (width, height) = match opt(args, "--size") {
+                Some(s) => {
+                    let (w, h) = s.split_once('x').ok_or("--size is WIDTHxHEIGHT")?;
+                    (Some(w.parse()?), Some(h.parse()?))
+                }
+                None => (None, None),
+            };
+            let name = opt(args, "--name").map(String::from);
+            let w: AgentWorkspace = c.call(Call::CreateWorkspace { name, width, height, scale: None })?;
+            println!("{}", w.id);
+        }
+        Some("rm") => {
+            let prefix = args.get(2).ok_or("workspaces rm needs a workspace id")?;
+            let list: Vec<AgentWorkspace> = c.call(Call::ListWorkspaces)?;
+            let ids: Vec<&String> = list.iter().map(|w| &w.id).filter(|id| id.starts_with(prefix.as_str())).collect();
+            let [id] = ids.as_slice() else { return Err(format!("{prefix} matches {} workspaces", ids.len()).into()) };
+            c.call::<serde_json::Value>(Call::RemoveWorkspace { id: (*id).clone() })?;
+        }
+        Some(other) => {
+            eprintln!("nyx-agents: unknown workspaces command {other}");
+            return Ok(2);
+        }
+    }
+    Ok(0)
 }
 
 fn ago(ms: u64) -> String {

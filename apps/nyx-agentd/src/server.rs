@@ -21,7 +21,8 @@ use serde_json::{Value, json};
 type Writer = Arc<Mutex<UnixStream>>;
 
 pub struct Daemon {
-    sessions: Mutex<HashMap<String, Session>>,
+    pub(crate) sessions: Mutex<HashMap<String, Session>>,
+    pub(crate) workspaces: crate::workspaces::Workspaces,
     /// The session on screen in the app, if its window is focused.
     viewing: Mutex<Option<String>>,
     /// For SQLite harnesses: the session ids already in a launch's folder.
@@ -39,7 +40,7 @@ impl Daemon {
         crate::log_to(&self.log, line);
     }
 
-    fn emit(&self, ev: &Event) {
+    pub(crate) fn emit(&self, ev: &Event) {
         let line = format!("{}\n", serde_json::to_string(ev).unwrap());
         self.subscribers.lock().unwrap().retain(|w| w.lock().unwrap().write_all(line.as_bytes()).is_ok());
     }
@@ -146,6 +147,7 @@ pub fn run() -> i32 {
     };
     let d = Arc::new(Daemon {
         sessions: Mutex::new(HashMap::new()),
+        workspaces: Default::default(),
         viewing: Mutex::new(None),
         before: Mutex::new(HashMap::new()),
         stopping: Mutex::new(Vec::new()),
@@ -155,6 +157,11 @@ pub fn run() -> i32 {
         log: paths::state_dir().join("nyx-agentd.log"),
     });
     d.log(&format!("started pid {}", std::process::id()));
+    crate::workspaces::clear_stale();
+    {
+        let d = d.clone();
+        std::thread::spawn(move || crate::workspaces::supervise(d));
+    }
 
     // Sessions from before: reattach to holders that are still running.
     for mut s in store::load_all() {
@@ -333,8 +340,16 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
             *d.viewing.lock().unwrap() = id;
             json!({})
         }
-        // Agent workspaces arrive with the compositor's API; none exist yet.
-        Call::ListWorkspaces => json!([]),
+        c @ (Call::ListWorkspaces
+        | Call::GetWorkspace { .. }
+        | Call::CreateWorkspace { .. }
+        | Call::RemoveWorkspace { .. }
+        | Call::ResizeWorkspace { .. }
+        | Call::LaunchInWorkspace { .. }
+        | Call::WorkspaceWindows { .. }
+        | Call::FocusWindow { .. }
+        | Call::CaptureWorkspace { .. }
+        | Call::WorkspaceInput { .. }) => crate::workspaces::handle(d, c)?,
         Call::Subscribe => json!({ "subscribed": true }),
     })
 }
@@ -353,7 +368,7 @@ fn project_id(root: &Path) -> String {
     format!("{h:016x}")
 }
 
-fn launch(d: &Arc<Daemon>, l: Launch) -> Result<Session, RpcError> {
+fn launch(d: &Arc<Daemon>, mut l: Launch) -> Result<Session, RpcError> {
     let h = d.harness(&l.harness).ok_or_else(|| err("unknown-harness", &format!("unknown harness {}", l.harness)))?;
     let mut cwd = Path::new(&l.cwd).canonicalize().map_err(|_| err("bad-cwd", "working directory does not exist"))?;
     if !cwd.is_dir() {
@@ -363,7 +378,19 @@ fn launch(d: &Arc<Daemon>, l: Launch) -> Result<Session, RpcError> {
         let name = if name.trim().is_empty() { format!("{}-{}", h.id, &new_id()[..6]) } else { name.clone() };
         cwd = nyx_agents_core::worktree::create(&cwd, &name).map_err(|e| err("worktree", &e))?;
     }
-    let plan = adapters::launch(&h, &l.args).map_err(|e| err("not-installed", &e))?;
+    let mut plan = adapters::launch(&h, &l.args).map_err(|e| err("not-installed", &e))?;
+    match l.workspace.as_deref() {
+        Some("new") => {
+            let name = l.title.clone().unwrap_or_else(|| h.name.clone());
+            let w = crate::workspaces::create(d, Some(name), Default::default())?;
+            l.workspace = Some(w.id);
+        }
+        Some(id) if !d.workspaces.exists(id) => return Err(err("not-found", "no such workspace")),
+        _ => {}
+    }
+    if let Some(w) = &l.workspace {
+        with_workspace_tools(&h.id, w, &mut plan.argv);
+    }
     let ctx = git::context(&cwd);
     let folder = cwd.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
     let s = Session {
@@ -402,7 +429,10 @@ fn resume(d: &Arc<Daemon>, id: &str) -> Result<Session, RpcError> {
         return Err(err("running", "session is already running"));
     }
     let h = d.harness(&s.harness).ok_or_else(|| err("unknown-harness", "harness not found"))?;
-    let plan = adapters::resume(&h, &s).map_err(|e| err("not-resumable", &e))?;
+    let mut plan = adapters::resume(&h, &s).map_err(|e| err("not-resumable", &e))?;
+    if let Some(w) = s.workspace.as_deref().filter(|w| d.workspaces.exists(w)) {
+        with_workspace_tools(&h.id, w, &mut plan.argv);
+    }
     let s = d
         .update(id, |s| {
             s.lifecycle = Lifecycle::Starting;
@@ -417,9 +447,18 @@ fn resume(d: &Arc<Daemon>, id: &str) -> Result<Session, RpcError> {
     Ok(s)
 }
 
+/// Give the agent the computer-use tools for its workspace.
+fn with_workspace_tools(harness: &str, workspace: &str, argv: &mut Vec<String>) {
+    let extra = crate::workspaces::harness_args(harness, workspace, &crate::workspaces::computer_exe());
+    argv.splice(1..1, extra);
+}
+
 fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), RpcError> {
     let exe = std::env::current_exe().map_err(|e| err("io", &e.to_string()))?;
     let mut cmd = Command::new(exe);
+    if let Some(w) = &s.workspace {
+        cmd.envs(crate::workspaces::session_env(d, w));
+    }
     cmd.arg("hold")
         .args(["--id", &s.id, "--cols", &s.cols.to_string(), "--rows", &s.rows.to_string(), "--cwd", &s.cwd, "--"])
         .args(argv)

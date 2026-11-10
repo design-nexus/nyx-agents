@@ -6,15 +6,17 @@ mod page;
 mod prefs;
 mod theme;
 mod window;
+mod workspace;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
 pub const APP_ID: &str = "io.github.design_nexus.nyx.Agents";
 
-const USAGE: &str = "Usage: nyx-agents [--open session/ID]\n\
+const USAGE: &str = "Usage: nyx-agents [--open session/ID | --open workspace/ID]\n\
 \n\
-  --open session/ID   show that session (ID may be a unique prefix)\n\
+  --open session/ID     show that session (ID may be a unique prefix)\n\
+  --open workspace/ID   show that agent workspace's live view\n\
 \n\
 Command line: nyx-agents help\n";
 
@@ -34,7 +36,7 @@ pub fn run() -> i32 {
         if let Some(target) = argv.windows(2).find(|w| w[0] == "--open").map(|w| w[1].clone()) {
             window::open_target(&target);
         }
-        // nyx-agents://session/ID[/subagent/ID], from Glimpse or a link.
+        // nyx-agents://session/ID[/subagent/ID] or workspace/ID, from Glimpse or a link.
         if let Some(target) = argv.iter().find_map(|a| a.strip_prefix("nyx-agents://")) {
             window::open_target(target.trim_end_matches('/'));
         }

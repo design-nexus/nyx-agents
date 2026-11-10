@@ -70,4 +70,7 @@ if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/nu
     fi
   fi
 fi
+if ! command -v sway >/dev/null; then
+  say "Agent workspaces need sway (headless, never on your screen): sudo pacman -S sway"
+fi
 say "Installed. Try: nyx-agents harnesses"

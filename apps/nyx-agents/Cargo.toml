@@ -15,6 +15,7 @@ path = "src/main.rs"
 nyx-agents-proto = { path = "../../crates/nyx-agents-proto" }
 nyx-agents-core = { path = "../../crates/nyx-agents-core" }
 nyx-agents-client = { path = "../../crates/nyx-agents-client" }
+nyx-agent-workspace = { path = "../../crates/nyx-agent-workspace" }
 nyx-term.workspace = true
 nyx-term-gtk.workspace = true
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
