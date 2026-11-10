@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use nyx_agents_core::claude;
+use nyx_agents_core::{claude, codex};
 use nyx_agents_proto::{Session, Subagent, SubagentSource, SubagentState};
 use nyx_term_gtk::TerminalView;
 
@@ -30,7 +30,8 @@ pub struct Inspector {
     viewer_box: gtk::Box,
     viewer_title: gtk::Label,
     viewer: RefCell<Option<Viewer>>,
-    session: RefCell<Option<(String, String)>>,
+    /// (harness, cwd, harness session id, created).
+    session: RefCell<Option<(String, String, String, u64)>>,
     subs: RefCell<Vec<Subagent>>,
     paned: gtk::Paned,
 }
@@ -122,7 +123,7 @@ impl Inspector {
             self.root.set_visible(false);
             return;
         };
-        *self.session.borrow_mut() = Some((s.cwd.clone(), hs));
+        *self.session.borrow_mut() = Some((s.harness.clone(), s.cwd.clone(), hs, s.created));
         *self.subs.borrow_mut() = s.subagents.clone();
         self.root.set_visible(!s.subagents.is_empty());
         let mut buttons = self.buttons.borrow_mut();
@@ -164,7 +165,7 @@ impl Inspector {
 
     /// Show one subagent's activity in the viewer, live while it runs.
     pub fn select(self: &Rc<Self>, id: &str) {
-        let Some((cwd, hs)) = self.session.borrow().clone() else { return };
+        let Some((harness, cwd, hs, created)) = self.session.borrow().clone() else { return };
         let Some(sub) = self.subs.borrow().iter().find(|s| s.id == id).cloned() else { return };
         for (k, b) in self.buttons.borrow().iter() {
             b.set_active(k == id);
@@ -173,7 +174,14 @@ impl Inspector {
             return;
         }
         self.close_viewer_widget();
-        let path = claude::subagent_transcript(&cwd, &hs, &sub.id);
+        // Each harness keeps its own records; render them its own way.
+        let (path, render): (std::path::PathBuf, fn(&[serde_json::Value]) -> String) = match harness.as_str() {
+            "codex" => match codex::rollout(&sub.id, created) {
+                Some(p) => (p, codex::render),
+                None => return,
+            },
+            _ => (claude::subagent_transcript(&cwd, &hs, &sub.id), claude::render),
+        };
         let view = TerminalView::new(theme::view_style(), true);
         view.set_fit(true);
         view.set_vexpand(true);
@@ -189,7 +197,7 @@ impl Inspector {
                     if recs.is_empty() {
                         break;
                     }
-                    v.feed(claude::render(&recs).as_bytes());
+                    v.feed(render(&recs).as_bytes());
                 }
             }
         };

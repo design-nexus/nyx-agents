@@ -171,7 +171,9 @@ fn caps(id: &str) -> Capabilities {
         // Verified: `grok --session-id <UUID>` starts a conversation with that id; `-r` resumes it.
         "grok" => Capabilities { preset_session_id: true, resume: true, program_status: true, ..Default::default() },
         // Verified: `codex resume <UUID>`. The id is read from Codex's rollout once it exists.
-        "codex" => Capabilities { resume: true, ..Default::default() },
+        "codex" => {
+            Capabilities { resume: true, subagents: Some(nyx_agents_proto::SubagentSource::Transcript), ..Default::default() }
+        }
         // Seen reporting OSC 7501 status when launched (2026-11-10).
         "antigravity" | "omp" | "crush" | "opencode" => Capabilities { program_status: true, ..Default::default() },
         _ => Capabilities::default(),

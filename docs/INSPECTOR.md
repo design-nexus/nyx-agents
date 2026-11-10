@@ -16,6 +16,7 @@ cancellation or reassignment, and it never writes to the records.
 | Harness | Source | Shown as |
 |---|---|---|
 | Claude Code | `~/.claude/projects/<cwd>/<session>/subagents/agent-<id>.jsonl` and `.meta.json`; the parent's `Agent` tool results | A transcript view (labelled; not a terminal) |
+| Codex CLI | Rollouts under `~/.codex/sessions/YYYY/MM/DD/` whose `session_meta` names the parent in `source.subagent.thread_spawn.parent_thread_id`; `task_complete` / `turn_aborted` | A transcript view (labelled; not a terminal) |
 | Others | Not integrated yet | No inspector |
 
 The manager follows the records with inotify (no polling), publishes the
@@ -35,9 +36,14 @@ transcript ending its turn marks completion.
 `nyx-agents --open session/<id>/subagent/<agent id>` opens the session with
 that subagent's viewer showing.
 
+Codex compresses old rollouts (`.jsonl.zst`); live ones are plain, and only
+those are followed.
+
 ## Tested
 
-With a simulated Claude Code that writes transcripts in the verified on-disk
+With a simulated Codex CLI writing rollouts in the format checked against
+real ones on this machine (`docs/bench/inspector-codex.png`), and with a
+simulated Claude Code that writes transcripts in the verified on-disk
 layout (`docs/bench/inspector.png`). Real Claude Code subagents were not run
 for this, to avoid spending tokens; the layout was checked against existing
 real transcripts on this machine.

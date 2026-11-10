@@ -448,20 +448,22 @@ fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), Rpc
     Ok(())
 }
 
-/// Learn a Codex session's own id from the rollout Codex writes for it.
-/// Read only; inotify wakes it, the timeout only notices the session ending.
+/// Learn a Codex session's own id from the rollout Codex writes for it,
+/// then follow the subagents it starts. Read only; inotify wakes it, the
+/// timeout only notices the session ending.
 fn watch_codex(d: Arc<Daemon>, id: String) {
     use nyx_agents_core::{codex, inotify::Watcher};
-    let Some((cwd, since)) = d
+    let Some((cwd, since, mut hs)) = d
         .sessions
         .lock()
         .unwrap()
         .get(&id)
-        .and_then(|s| (s.harness == "codex" && s.harness_session.is_none()).then(|| (s.cwd.clone(), s.created)))
+        .and_then(|s| (s.harness == "codex").then(|| (s.cwd.clone(), s.created, s.harness_session.clone())))
     else {
         return;
     };
     let Ok(w) = Watcher::new() else { return };
+    let mut subs = codex::Subagents::default();
     loop {
         for dir in codex::day_dirs(since) {
             w.add(&dir);
@@ -469,10 +471,17 @@ fn watch_codex(d: Arc<Daemon>, id: String) {
                 w.add(parent);
             }
         }
-        let taken: Vec<String> = d.sessions.lock().unwrap().values().filter_map(|s| s.harness_session.clone()).collect();
-        if let Some(found) = codex::find_session(&cwd, since, &taken) {
-            d.update(&id, |s| s.harness_session = Some(found));
-            return;
+        if hs.is_none() {
+            let taken: Vec<String> = d.sessions.lock().unwrap().values().filter_map(|s| s.harness_session.clone()).collect();
+            if let Some(found) = codex::find_session(&cwd, since, &taken) {
+                d.update(&id, |s| s.harness_session = Some(found.clone()));
+                hs = Some(found);
+            }
+        }
+        if let Some(parent) = &hs
+            && let Some(list) = subs.refresh(parent, since)
+        {
+            d.update(&id, |s| s.subagents = list);
         }
         let live =
             d.sessions.lock().unwrap().get(&id).is_some_and(|s| matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting));

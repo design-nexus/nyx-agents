@@ -6,7 +6,7 @@ on 2026-11-10. Anything not listed as supported is hidden in the app.
 | Harness | Version | Tier | Launch | Status (OSC 7501) | Resume | Subagents |
 |---|---|---|---|---|---|---|
 | Claude Code (`claude`) | 2.1.322 | native | yes, with a preset session id | not seen yet | yes, once a conversation exists | yes: transcripts, read-only |
-| Codex CLI (`codex`) | 0.167.0 | native | yes | not seen | yes: id read from Codex's rollout (`codex resume <id>`) | not yet |
+| Codex CLI (`codex`) | 0.167.0 | native | yes | not seen | yes: id read from Codex's rollout (`codex resume <id>`) | yes: child rollouts, read-only |
 | Grok Build (`grok`) | 1.0.77 | native | yes, with a preset session id (`--session-id`) | yes | yes (`--resume <id>`) | not yet |
 | Antigravity CLI (`agy`) | 1.5.4 | terminal | yes | yes | not yet | not yet |
 | oh-my-pi (`omp`) | 18.x | terminal | yes | yes | not yet | not yet |
@@ -27,7 +27,6 @@ was tested for real.
 
 Not yet integrated, with what is known:
 
-- **Codex subagents**: rollouts carry `session_meta.source.subagent.thread_spawn.parent_thread_id`.
 - **Antigravity**: `--conversation <id>` resumes; ids live in SQLite with protobuf payloads.
 - **oh-my-pi**: `-r <id>` resumes; sessions are JSONL under `~/.omp/agent/sessions`.
 - **OpenCode**: `-s <id>` continues a session; the id format it accepts for a new one is unverified.
