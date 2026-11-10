@@ -12,6 +12,8 @@ scratch=$(mktemp -d /tmp/nyx-agents-smoke.XXXX)
 export NYX_AGENTS_RUNTIME_DIR=$scratch/run NYX_AGENTS_STATE_DIR=$scratch/state XDG_CONFIG_HOME=$scratch/config
 # Usage scans made-up records, never the real ones.
 export NYX_AGENTS_CACHE_DIR=$scratch/cache CLAUDE_CONFIG_DIR=$scratch/claude CODEX_HOME=$scratch/codex XDG_DATA_HOME=$scratch/data
+export GROK_HOME=$scratch/grok CURSOR_DATA_HOME=$scratch/cursor CURSOR_CONFIG_HOME=$scratch/cursor-config MUSE_DATA_HOME=$scratch/muse
+export ANTIGRAVITY_DATA_DIR=$scratch/antigravity OMP_HOME=$scratch/omp HERMES_HOME=$scratch/hermes
 mkdir -p "$XDG_CONFIG_HOME/nyx-agents"
 cat >"$XDG_CONFIG_HOME/nyx-agents/harnesses.toml" <<'EOF'
 [[harness]]

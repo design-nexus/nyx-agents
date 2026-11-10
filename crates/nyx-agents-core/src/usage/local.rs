@@ -1,6 +1,7 @@
 //! Agents whose usage is only in their own session stores, with no quota to ask
-//! about: oh-my-pi (`~/.omp/agent/sessions/<folder>/<time>_<id>.jsonl`), OpenCode
-//! (`opencode.db`), Hermes (`~/.hermes/state.db`) and Crush (each project's
+//! about: oh-my-pi (`~/.omp/agent/sessions/<folder>/<time>_<id>.jsonl`, `OMP_HOME`
+//! overrides `~/.omp`), OpenCode (`opencode.db`), Hermes (`~/.hermes/state.db`,
+//! `HERMES_HOME` overrides `~/.hermes`) and Crush (each project's
 //! `.crush/crush.db`, listed in `~/.local/share/crush/projects.json`). A prompt is a
 //! user message, a step an assistant one.
 
@@ -16,6 +17,14 @@ use super::logcache::LogCache;
 use super::{Tally, json_line, text, time};
 
 const VERSION: u32 = 1;
+
+pub fn omp_home() -> PathBuf {
+    std::env::var_os("OMP_HOME").map(PathBuf::from).unwrap_or_else(|| crate::paths::home().join(".omp"))
+}
+
+fn hermes_home() -> PathBuf {
+    std::env::var_os("HERMES_HOME").map(PathBuf::from).unwrap_or_else(|| crate::paths::home().join(".hermes"))
+}
 
 fn data_home() -> PathBuf {
     std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| crate::paths::home().join(".local/share"))
@@ -158,7 +167,7 @@ fn omp_line(e: &mut OmpFile, line: &[u8], mtime: f64) {
 
 pub fn omp(refresh: bool) -> (Usage, Vec<UsageSession>) {
     let _ = refresh;
-    let base = crate::paths::home().join(".omp/agent/sessions");
+    let base = omp_home().join("agent/sessions");
     let mut cache = LogCache::new("omp", VERSION);
     let (mut list, mut msgs) = (vec![], vec![]);
     let mut files: Vec<PathBuf> = std::fs::read_dir(&base)
@@ -253,7 +262,7 @@ fn opencode_at(db: &Path) -> (Usage, Vec<UsageSession>) {
 }
 
 pub fn hermes(_refresh: bool) -> (Usage, Vec<UsageSession>) {
-    let Some(c) = open_ro(&crate::paths::home().join(".hermes/state.db")) else { return assemble("hermes", "Hermes", "hermes", vec![], vec![]) };
+    let Some(c) = open_ro(&hermes_home().join("state.db")) else { return assemble("hermes", "Hermes", "hermes", vec![], vec![]) };
     let sessions = rows(&c, "sessions");
     let model_of: HashMap<String, String> = sessions.iter().map(|r| (s(r, "id"), crate::sanitize::line(&s(r, "model"), 80))).collect();
     let list = sessions

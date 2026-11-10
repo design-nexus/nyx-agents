@@ -75,7 +75,7 @@ pub fn records(harness: &str, id: &str) -> Vec<PathBuf> {
         }
         "omp" => {
             let suffix = format!("_{id}.jsonl");
-            find(&crate::paths::home().join(".omp/agent/sessions"), 1, &|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(&suffix)), &mut out);
+            find(&crate::usage::local::omp_home().join("agent/sessions"), 1, &|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(&suffix)), &mut out);
         }
         _ => {}
     }
