@@ -2,23 +2,26 @@
 //! programs, owned by the manager.
 //!
 //! A [`WorkspaceBackend`] makes the desktop; [`SwayWorkspaces`] runs each one
-//! as a headless sway (`nyx-agent-workspace`). Workspaces end with the
-//! manager, and one with no running sessions is removed after a grace period.
-//! Sessions keep running whether or not anyone is looking at their workspace.
+//! as a headless sway (`nyx-agent-workspace`) under a holder process of its
+//! own (`ws_holder`), so workspaces outlive the manager and are picked up
+//! again when it restarts. One with no running sessions is removed after a
+//! grace period. Sessions keep running whether or not anyone is looking at
+//! their workspace.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use nyx_agent_workspace::{self as ws, Capturer, Input, Instance, Options};
-use nyx_agents_core::{new_id, paths, sanitize};
+use nyx_agent_workspace::{self as ws, Capturer, Input, Options};
+use nyx_agents_core::{new_id, sanitize};
 use nyx_agents_proto::{
     AgentWorkspace, Call, Event, InputAction, Lifecycle, RpcError, Screenshot, WorkspaceState, WorkspaceWindow, now_ms,
 };
 use serde_json::{Value, json};
 
 use crate::server::Daemon;
+use crate::ws_holder::{self, HolderState, Request};
 
 /// How long a workspace with no running session is kept.
 const GRACE: Duration = Duration::from_secs(10 * 60);
@@ -40,32 +43,105 @@ pub trait Desktop: Send + Sync {
     fn screenshot(&self, max_w: u32, max_h: u32) -> Result<Screenshot, String>;
     /// Run input steps in order; the pointer's final position.
     fn input(&self, actions: &[InputAction]) -> Result<(u32, u32), String>;
+    /// The clipboard in the first of `types` it offers.
+    fn clipboard_get(&self, types: &[String]) -> Result<Option<(String, Vec<u8>)>, String>;
+    /// Offer `items` (mime type, bytes) as the clipboard.
+    fn clipboard_set(&self, items: Vec<(String, Vec<u8>)>) -> Result<(), String>;
+    /// The X display for X11 programs, if it has one.
+    fn x_display(&self) -> Option<String>;
     fn stop(&self);
 }
 
 /// Makes desktops. Sway today; a compositor-native backend could take its
 /// place behind the same interface.
 pub trait WorkspaceBackend: Send + Sync {
-    fn create(&self, id: &str, o: Options) -> Result<Arc<dyn Desktop>, String>;
+    fn create(&self, id: &str, name: &str, o: Options) -> Result<Arc<dyn Desktop>, String>;
 }
 
 pub struct SwayWorkspaces;
 
 impl WorkspaceBackend for SwayWorkspaces {
-    fn create(&self, id: &str, o: Options) -> Result<Arc<dyn Desktop>, String> {
-        let runtime = paths::runtime_dir().join("ws");
-        let data = paths::state_dir().join("workspaces");
-        paths::private_dir(&runtime).map_err(|e| e.to_string())?;
-        paths::private_dir(&data).map_err(|e| e.to_string())?;
-        let instance = Instance::start(id, &runtime, &data, o)?;
-        Ok(Arc::new(SwayDesktop { instance, input: Mutex::new(None), capture: Mutex::new(None) }))
+    fn create(&self, id: &str, name: &str, o: Options) -> Result<Arc<dyn Desktop>, String> {
+        use std::io::BufRead;
+        use std::os::unix::process::CommandExt;
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let mut cmd = std::process::Command::new(exe);
+        cmd.arg("ws-hold")
+            .args(["--id", id, "--name", name])
+            .args(["--width", &o.width.to_string(), "--height", &o.height.to_string(), "--scale", &o.scale.to_string()])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        // Its own session, so it outlives the manager like a session's holder.
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+        let mut child = cmd.spawn().map_err(|e| format!("cannot start the workspace: {e}"))?;
+        let out = child.stdout.take().unwrap();
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            let _ = std::io::BufReader::new(out).read_line(&mut line);
+            let _ = tx.send(line);
+        });
+        let line = rx.recv_timeout(Duration::from_secs(30)).map_err(|_| "the workspace did not start in time".to_string())?;
+        let v: Value = serde_json::from_str(&line).map_err(|_| "the workspace ended while starting".to_string())?;
+        if let Some(e) = v.get("error").and_then(|e| e.as_str()) {
+            return Err(e.to_string());
+        }
+        let st: HolderState = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        Ok(Arc::new(SwayDesktop::attach(st)))
     }
 }
 
+/// A workspace reached through its holder (launch, resize, clipboard, stop)
+/// and its sockets (windows, input, capture).
 struct SwayDesktop {
-    instance: Instance,
+    dir: PathBuf,
+    state: Mutex<HolderState>,
     input: Mutex<Option<Input>>,
     capture: Mutex<Option<Capturer>>,
+}
+
+impl SwayDesktop {
+    fn attach(st: HolderState) -> Self {
+        Self {
+            dir: ws_holder::runtime_root().join(&st.id),
+            state: Mutex::new(st),
+            input: Mutex::new(None),
+            capture: Mutex::new(None),
+        }
+    }
+
+    fn wayland(&self) -> PathBuf {
+        self.state.lock().unwrap().wayland.clone()
+    }
+
+    fn ipc(&self) -> Result<ws::Ipc, String> {
+        let sock = self.state.lock().unwrap().swaysock.clone();
+        ws::Ipc::connect(&sock).map_err(|e| format!("workspace not reachable: {e}"))
+    }
+
+    fn with_input<T>(&self, f: impl FnOnce(&mut Input) -> Result<T, String>) -> Result<T, String> {
+        let mut slot = self.input.lock().unwrap();
+        let (w, h) = self.options().logical();
+        if slot.is_none() {
+            *slot = Some(Input::connect(&self.wayland(), w, h)?);
+        }
+        let input = slot.as_mut().unwrap();
+        input.set_size(w, h);
+        let r = f(input);
+        if r.is_err() && !input.alive() {
+            *slot = None;
+        }
+        r
+    }
 }
 
 fn window(w: ws::Window) -> WorkspaceWindow {
@@ -83,56 +159,44 @@ fn window(w: ws::Window) -> WorkspaceWindow {
     }
 }
 
-impl SwayDesktop {
-    fn with_input<T>(&self, f: impl FnOnce(&mut Input) -> Result<T, String>) -> Result<T, String> {
-        let mut slot = self.input.lock().unwrap();
-        let (w, h) = self.instance.options().logical();
-        if slot.is_none() {
-            *slot = Some(Input::connect(&self.instance.wayland, w, h)?);
-        }
-        let input = slot.as_mut().unwrap();
-        input.set_size(w, h);
-        let r = f(input);
-        if r.is_err() && !input.alive() {
-            *slot = None;
-        }
-        r
-    }
-}
-
 impl Desktop for SwayDesktop {
     fn handle(&self) -> String {
-        format!("sway:{}", self.instance.wayland.display())
+        format!("sway:{}", self.wayland().display())
     }
 
     fn alive(&self) -> bool {
-        self.instance.alive()
+        ws_holder::alive(self.state.lock().unwrap().pid)
     }
 
     fn options(&self) -> Options {
-        self.instance.options()
+        self.state.lock().unwrap().options
     }
 
     fn resize(&self, o: Options) -> Result<(), String> {
-        self.instance.resize(o)
+        o.validate()?;
+        ws_holder::call(&self.dir, &Request::Resize { options: o })?;
+        self.state.lock().unwrap().options = o;
+        Ok(())
     }
 
     fn launch(&self, argv: &[String], cwd: Option<&Path>) -> Result<u32, String> {
-        self.instance.launch(argv, cwd)
+        let v = ws_holder::call(&self.dir, &Request::Launch { argv: argv.to_vec(), cwd: cwd.map(Path::to_path_buf) })?;
+        v["pid"].as_u64().map(|p| p as u32).ok_or_else(|| "the workspace gave no pid".into())
     }
 
     fn windows(&self) -> Result<Vec<WorkspaceWindow>, String> {
-        Ok(self.instance.windows()?.into_iter().map(window).collect())
+        let tree = self.ipc()?.tree().map_err(|e| e.to_string())?;
+        Ok(ws::windows(&tree).into_iter().map(window).collect())
     }
 
     fn focus(&self, window: i64) -> Result<(), String> {
-        self.instance.focus(window)
+        self.ipc()?.run(&format!("[con_id={window}] focus"))
     }
 
     fn screenshot(&self, max_w: u32, max_h: u32) -> Result<Screenshot, String> {
         let mut slot = self.capture.lock().unwrap();
         if slot.is_none() {
-            *slot = Some(Capturer::connect(&self.instance.wayland)?);
+            *slot = Some(Capturer::connect(&self.wayland())?);
         }
         let frame = match slot.as_mut().unwrap().capture() {
             Ok(f) => f,
@@ -142,7 +206,7 @@ impl Desktop for SwayDesktop {
             }
         };
         // Always at logical size or smaller, so screenshot pixels are pointer coordinates.
-        let (lw, lh) = self.instance.options().logical();
+        let (lw, lh) = self.options().logical();
         let frame = ws::shrink(&frame, lw.min(max_w), lh.min(max_h));
         let png = ws::png(&frame)?;
         Ok(Screenshot { width: frame.width, height: frame.height, png: ws::base64(&png) })
@@ -157,10 +221,38 @@ impl Desktop for SwayDesktop {
         })
     }
 
+    fn clipboard_get(&self, types: &[String]) -> Result<Option<(String, Vec<u8>)>, String> {
+        let v = ws_holder::call(&self.dir, &Request::ClipboardGet { types: types.to_vec() })?;
+        let Some(mime) = v["mime"].as_str() else { return Ok(None) };
+        let data = v["data"].as_str().and_then(ws::unbase64).ok_or("the workspace sent a bad clipboard")?;
+        Ok(Some((mime.to_string(), data)))
+    }
+
+    fn clipboard_set(&self, items: Vec<(String, Vec<u8>)>) -> Result<(), String> {
+        let items = items.into_iter().map(|(m, d)| (m, ws::base64(&d))).collect();
+        ws_holder::call(&self.dir, &Request::ClipboardSet { items }).map(drop)
+    }
+
+    fn x_display(&self) -> Option<String> {
+        self.state.lock().unwrap().display.clone()
+    }
+
     fn stop(&self) {
         *self.input.lock().unwrap() = None;
         *self.capture.lock().unwrap() = None;
-        self.instance.stop();
+        let pid = self.state.lock().unwrap().pid;
+        let _ = ws_holder::call(&self.dir, &Request::Stop);
+        let start = Instant::now();
+        while ws_holder::alive(pid) && start.elapsed() < Duration::from_secs(4) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if ws_holder::alive(pid) {
+            // Its sway and programs end with it.
+            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+        }
+        ws::remove_tree(&self.dir);
+        let id = self.state.lock().unwrap().id.clone();
+        ws::remove_tree(&ws_holder::data_root().join(id));
     }
 }
 
@@ -196,6 +288,10 @@ impl Workspaces {
         self.map.lock().unwrap().contains_key(id)
     }
 
+    pub fn x_display(&self, id: &str) -> Option<String> {
+        self.map.lock().unwrap().get(id)?.desktop.x_display()
+    }
+
     /// The Wayland socket of a running workspace.
     pub fn socket(&self, id: &str) -> Option<String> {
         let map = self.map.lock().unwrap();
@@ -204,12 +300,46 @@ impl Workspaces {
     }
 }
 
-/// Workspaces end with the manager; remove what a previous run left.
-pub fn clear_stale() {
-    for dir in [paths::runtime_dir().join("ws"), paths::state_dir().join("workspaces")] {
-        for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-            let _ = std::fs::remove_dir_all(e.path());
+/// Pick up the workspaces whose holders are still running (the manager
+/// restarted) and remove what ended ones left behind.
+pub fn restore(d: &Daemon) {
+    let mut live = Vec::new();
+    for e in std::fs::read_dir(ws_holder::runtime_root()).into_iter().flatten().flatten() {
+        let st = std::fs::read(ws_holder::state_file(&e.path()))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<HolderState>(&b).ok())
+            .filter(|st| ws_holder::alive(st.pid));
+        match st {
+            Some(st) => live.push(st),
+            None => {
+                ws::remove_tree(&e.path());
+            }
         }
+    }
+    for e in std::fs::read_dir(ws_holder::data_root()).into_iter().flatten().flatten() {
+        if !live.iter().any(|st| e.file_name() == st.id.as_str()) {
+            ws::remove_tree(&e.path());
+        }
+    }
+    for st in live {
+        let o = st.options;
+        let record = AgentWorkspace {
+            id: st.id.clone(),
+            name: st.name.clone(),
+            sessions: Vec::new(),
+            compositor: Some(format!("sway:{}", st.wayland.display())),
+            state: WorkspaceState::Running,
+            width: o.width,
+            height: o.height,
+            scale: o.scale,
+            created: st.created,
+            windows: 0,
+            focused: None,
+        };
+        d.log(&format!("workspace {} picked up again", st.id));
+        let id = st.id.clone();
+        let desktop: Arc<dyn Desktop> = Arc::new(SwayDesktop::attach(st));
+        d.workspaces.map.lock().unwrap().insert(id, Entry { record, desktop, used: Instant::now() });
     }
 }
 
@@ -259,11 +389,12 @@ fn announce(d: &Daemon, id: &str) {
 pub fn create(d: &Arc<Daemon>, name: Option<String>, o: Options) -> Result<AgentWorkspace, RpcError> {
     o.validate().map_err(|e| err("bad-size", &e))?;
     let id = new_id();
-    let desktop = d.workspaces.backend.create(&id, o).map_err(|e| err("workspace", &e))?;
     let n = d.workspaces.map.lock().unwrap().len() + 1;
+    let name = name.map(|n| sanitize::line(&n, 80)).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Workspace {n}"));
+    let desktop = d.workspaces.backend.create(&id, &name, o).map_err(|e| err("workspace", &e))?;
     let record = AgentWorkspace {
         id: id.clone(),
-        name: name.map(|n| sanitize::line(&n, 80)).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Workspace {n}")),
+        name,
         sessions: Vec::new(),
         compositor: Some(desktop.handle()),
         state: WorkspaceState::Running,
@@ -358,6 +489,33 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
             let (x, y) = d.workspaces.desktop(&id)?.input(&actions).map_err(|e| err("input", &e))?;
             json!({ "x": x, "y": y })
         }
+        Call::WorkspaceClipboardGet { id, image } => {
+            let desk = d.workspaces.desktop(&id)?;
+            if image {
+                let got = desk.clipboard_get(&["image/png".to_string()]).map_err(|e| err("clipboard", &e))?;
+                json!({ "png": got.map(|(_, b)| ws::base64(&b)) })
+            } else {
+                let types: Vec<String> = ws::TEXT_TYPES.iter().map(|t| t.to_string()).collect();
+                let got = desk.clipboard_get(&types).map_err(|e| err("clipboard", &e))?;
+                json!({ "text": got.map(|(_, b)| String::from_utf8_lossy(&b).into_owned()) })
+            }
+        }
+        Call::WorkspaceClipboardSet { id, text, png } => {
+            let desk = d.workspaces.desktop(&id)?;
+            let items: Vec<(String, Vec<u8>)> = match (text, png) {
+                (Some(t), None) => ws::TEXT_TYPES.iter().map(|m| (m.to_string(), t.clone().into_bytes())).collect(),
+                (None, Some(p)) => {
+                    let bytes = ws::unbase64(&p).ok_or_else(|| err("bad-png", "png is not base64"))?;
+                    if !bytes.starts_with(b"\x89PNG") {
+                        return Err(err("bad-png", "not a PNG image"));
+                    }
+                    vec![("image/png".to_string(), bytes)]
+                }
+                _ => return Err(err("bad-request", "give text or png")),
+            };
+            desk.clipboard_set(items).map_err(|e| err("clipboard", &e))?;
+            json!({})
+        }
         _ => return Err(err("bad-request", "not a workspace call")),
     })
 }
@@ -402,6 +560,10 @@ pub fn harness_args(harness: &str, workspace: &str, exe: &Path) -> Vec<String> {
             "-c".into(),
             format!("mcp_servers.nyx_computer.args={}", serde_json::to_string(&args).unwrap()),
         ],
+        "muse" => {
+            let server = json!({ "command": exe, "args": args });
+            vec!["-c".into(), format!("mcpServers.nyx-computer={server}")]
+        }
         _ => Vec::new(),
     }
 }
@@ -415,13 +577,20 @@ pub fn computer_exe() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("nyx-agents"))
 }
 
-/// The environment a session in workspace `id` gets on top of the manager's.
-pub fn session_env(d: &Daemon, id: &str) -> Vec<(String, String)> {
+/// The environment a session in workspace `id` gets on top of the manager's:
+/// GUI programs the agent starts from its own shell open in its workspace.
+pub fn session_env(d: &Daemon, id: &str) -> (Vec<(String, String)>, Vec<&'static str>) {
     let mut env = vec![("NYX_AGENT_WORKSPACE".to_string(), id.to_string())];
+    let mut remove = vec!["DISPLAY"];
     if let Some(sock) = d.workspaces.socket(id) {
-        env.push(("NYX_AGENT_WAYLAND_DISPLAY".into(), sock));
+        env.push(("NYX_AGENT_WAYLAND_DISPLAY".into(), sock.clone()));
+        env.push(("WAYLAND_DISPLAY".into(), sock));
     }
-    env
+    if let Some(x) = d.workspaces.x_display(id) {
+        remove.clear();
+        env.push(("DISPLAY".into(), x));
+    }
+    (env, remove)
 }
 
 #[cfg(test)]
@@ -445,5 +614,10 @@ mod tests {
         assert_eq!(a[1], r#"mcp_servers.nyx_computer.command="/opt/a \"b\"/nyx-agents""#);
         assert_eq!(a[3], r#"mcp_servers.nyx_computer.args=["computer","--workspace","w1"]"#);
         assert!(harness_args("grok", "w1", Path::new("x")).is_empty());
+        let m = harness_args("muse", "w1", Path::new("/bin/nyx-agents"));
+        assert_eq!(m[0], "-c");
+        let (key, value) = m[1].split_once('=').unwrap();
+        assert_eq!(key, "mcpServers.nyx-computer");
+        assert_eq!(serde_json::from_str::<Value>(value).unwrap()["args"], json!(["computer", "--workspace", "w1"]));
     }
 }

@@ -638,6 +638,22 @@ pub enum Call {
         id: WorkspaceId,
         actions: Vec<InputAction>,
     },
+    /// The workspace's clipboard: `{text}`, or `{png}` (base64) with `image`.
+    #[serde(rename = "workspaces.clipboard_get")]
+    WorkspaceClipboardGet {
+        id: WorkspaceId,
+        #[serde(default)]
+        image: bool,
+    },
+    /// Put text, or a base64 PNG, on the workspace's clipboard.
+    #[serde(rename = "workspaces.clipboard_set")]
+    WorkspaceClipboardSet {
+        id: WorkspaceId,
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        png: Option<String>,
+    },
     /// Every agent's usage that has records or a quota, last used first.
     /// `refresh` rescans now (and fetches quotas, ignoring the retry wait).
     #[serde(rename = "usage.list")]

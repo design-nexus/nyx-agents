@@ -28,9 +28,11 @@ real databases; Muse and Hermes share that path but were not simulated); Grok's 
 was tested for real.
 
 **Agent workspaces** (computer-use tools, see WORKSPACES.md): Claude Code
-(`--mcp-config`) and Codex (`-c mcp_servers.nyx_computer.*`) get them for a
-session with a workspace. The others are not wired yet; any harness that
-takes stdio MCP servers can run `nyx-agents computer --workspace ID`.
+(`--mcp-config`), Codex (`-c mcp_servers.nyx_computer.*`) and Muse
+(`-c mcpServers.nyx-computer=…`) get them per session. Grok, Hermes,
+Antigravity, Cursor CLI, oh-my-pi, OpenCode and Crush read MCP servers only
+from config: `nyx-agents computer register` adds one entry to each, which
+offers tools only in sessions with a workspace.
 
 Not yet integrated, with what is known:
 

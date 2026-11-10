@@ -196,7 +196,7 @@ pub fn run() -> i32 {
         log: paths::state_dir().join("nyx-agentd.log"),
     });
     d.log(&format!("started pid {}", std::process::id()));
-    crate::workspaces::clear_stale();
+    crate::workspaces::restore(&d);
     {
         let d = d.clone();
         std::thread::spawn(move || crate::workspaces::supervise(d));
@@ -393,7 +393,9 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
         | Call::WorkspaceWindows { .. }
         | Call::FocusWindow { .. }
         | Call::CaptureWorkspace { .. }
-        | Call::WorkspaceInput { .. }) => crate::workspaces::handle(d, c)?,
+        | Call::WorkspaceInput { .. }
+        | Call::WorkspaceClipboardGet { .. }
+        | Call::WorkspaceClipboardSet { .. }) => crate::workspaces::handle(d, c)?,
         Call::ListUsage { refresh } => {
             // Every agent once, so the first answer after a start isn't partial.
             for a in usage::AGENTS {
@@ -682,7 +684,11 @@ fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), Rpc
     let exe = std::env::current_exe().map_err(|e| err("io", &e.to_string()))?;
     let mut cmd = Command::new(exe);
     if let Some(w) = &s.workspace {
-        cmd.envs(crate::workspaces::session_env(d, w));
+        let (env, remove) = crate::workspaces::session_env(d, w);
+        cmd.envs(env);
+        for k in remove {
+            cmd.env_remove(k);
+        }
     }
     cmd.arg("hold")
         .args(["--id", &s.id, "--cols", &s.cols.to_string(), "--rows", &s.rows.to_string(), "--cwd", &s.cwd, "--"])

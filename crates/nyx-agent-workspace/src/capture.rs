@@ -202,6 +202,40 @@ pub fn base64(data: &[u8]) -> String {
     out
 }
 
+/// Decode standard base64 (padding optional); `None` on anything else.
+pub fn unbase64(text: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        } as u32)
+    };
+    let bytes: Vec<u8> = text.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    let bytes = bytes.strip_suffix(b"==").or_else(|| bytes.strip_suffix(b"=")).unwrap_or(&bytes);
+    let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
+    for chunk in bytes.chunks(4) {
+        let mut n = 0u32;
+        for (i, c) in chunk.iter().enumerate() {
+            n |= val(*c)? << (18 - 6 * i);
+        }
+        out.push((n >> 16) as u8);
+        if chunk.len() > 2 {
+            out.push((n >> 8) as u8);
+        }
+        if chunk.len() > 3 {
+            out.push(n as u8);
+        }
+        if chunk.len() == 1 {
+            return None;
+        }
+    }
+    Some(out)
+}
+
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, r: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
         if let wl_registry::Event::Global { name, interface, version } = e {
@@ -288,5 +322,10 @@ mod tests {
         assert_eq!(base64(b"f"), "Zg==");
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+        for s in [&b""[..], b"f", b"fo", b"foo", b"foob", b"\xff\x00\x10"] {
+            assert_eq!(unbase64(&base64(s)).as_deref(), Some(s));
+        }
+        assert_eq!(unbase64("Zm9v YmFy"), Some(b"foobar".to_vec()));
+        assert_eq!(unbase64("Zm9v!"), None);
     }
 }

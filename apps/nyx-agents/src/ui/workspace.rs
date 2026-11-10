@@ -44,6 +44,64 @@ pub fn open(id: &str, parent: Option<gtk::Window>, toast: impl Fn(&str) + 'stati
     );
 }
 
+/// Put your clipboard (text, else an image) on workspace `id`'s clipboard.
+pub fn push_clipboard(id: &str, done: impl FnOnce(Result<(), String>) + 'static) {
+    let Some(display) = gdk::Display::default() else { return done(Err("no display".into())) };
+    let clip = display.clipboard();
+    let id = id.to_string();
+    let text = super::text_on(&clip.formats());
+    glib::spawn_future_local(async move {
+        let call = if text {
+            match clip.read_text_future().await {
+                Ok(Some(t)) => Call::WorkspaceClipboardSet { id, text: Some(t.to_string()), png: None },
+                _ => return done(Err("your clipboard is empty".into())),
+            }
+        } else {
+            match clip.read_texture_future().await {
+                Ok(Some(t)) => {
+                    let png = nyx_agent_workspace::base64(&t.save_to_png_bytes());
+                    Call::WorkspaceClipboardSet { id, text: None, png: Some(png) }
+                }
+                _ => return done(Err("your clipboard holds no text or image".into())),
+            }
+        };
+        daemon::request(move |c| c.call::<serde_json::Value>(call).map(drop), done);
+    });
+}
+
+/// Put workspace `id`'s clipboard (text, else an image) on yours.
+pub fn pull_clipboard(id: &str, done: impl FnOnce(Result<(), String>) + 'static) {
+    let id = id.to_string();
+    daemon::request(
+        move |c| {
+            let t: serde_json::Value = c.call(Call::WorkspaceClipboardGet { id: id.clone(), image: false })?;
+            if let Some(text) = t["text"].as_str() {
+                return Ok((Some(text.to_string()), None));
+            }
+            let i: serde_json::Value = c.call(Call::WorkspaceClipboardGet { id, image: true })?;
+            Ok((None, i["png"].as_str().and_then(nyx_agent_workspace::unbase64)))
+        },
+        move |r| {
+            let Some(display) = gdk::Display::default() else { return };
+            match r {
+                Ok((Some(text), _)) => {
+                    display.clipboard().set_text(&text);
+                    done(Ok(()))
+                }
+                Ok((None, Some(png))) => match gdk::Texture::from_bytes(&glib::Bytes::from_owned(png)) {
+                    Ok(t) => {
+                        display.clipboard().set_texture(&t);
+                        done(Ok(()))
+                    }
+                    Err(e) => done(Err(e.to_string())),
+                },
+                Ok(_) => done(Err("the workspace's clipboard is empty".into())),
+                Err(e) => done(Err(e)),
+            }
+        },
+    );
+}
+
 /// Keep an open view's title current.
 pub fn changed(w: &AgentWorkspace) {
     if let Some(win) = OPEN.with(|o| o.borrow().get(&w.id).cloned()) {
@@ -125,12 +183,15 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
         let input = input.clone();
         let socket = socket.clone();
         let driving = driving.clone();
+        let ws_id = w.id.clone();
         let picture = picture.clone();
         take.connect_toggled(move |b| {
             driving.set_visible(b.is_active());
             if b.is_active() {
                 *input.borrow_mut() = Some(drive(&socket, logical));
                 picture.grab_focus();
+                // What you copied is there to paste while you drive.
+                push_clipboard(&ws_id, |_| {});
             } else {
                 input.borrow_mut().take();
             }
@@ -145,8 +206,25 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
                 return;
             }
             let (t, wn, id) = (take.clone(), win.clone(), id.clone());
+            let (push_id, pull_id) = (id.clone(), id.clone());
+            let note = |what: &'static str| {
+                move |r: Result<(), String>| {
+                    if let Err(e) = r {
+                        eprintln!("nyx-agents: {what}: {e}");
+                    }
+                }
+            };
             let entries = vec![
                 nyx_ui::menu::check("Take over", false, move |on| t.set_active(on)),
+                nyx_ui::menu::separator(),
+                nyx_ui::menu::item("Paste my clipboard into the workspace", move || {
+                    push_clipboard(&push_id, note("copying your clipboard in"))
+                })
+                .icon("edit-paste-symbolic"),
+                nyx_ui::menu::item("Copy the workspace's clipboard", move || {
+                    pull_clipboard(&pull_id, note("copying the workspace's clipboard"))
+                })
+                .icon("edit-copy-symbolic"),
                 nyx_ui::menu::separator(),
                 nyx_ui::menu::item("Close the view", move || wn.close()).icon("window-close-symbolic"),
                 nyx_ui::menu::item("End this workspace", move || {

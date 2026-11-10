@@ -180,6 +180,19 @@ impl Pane {
             let v = TerminalView::new(theme::view_style(), false);
             // The holder answers the program's terminal queries.
             v.set_answers_queries(false);
+            // An agent with a workspace reads the clipboard there; hand a pasted
+            // image over before passing Ctrl+V on.
+            if let Some(w) = s.workspace.clone() {
+                let weak = v.downgrade();
+                v.connect_image_paste(move |_| {
+                    let weak = weak.clone();
+                    super::workspace::push_clipboard(&w, move |_| {
+                        if let Some(v) = weak.upgrade() {
+                            v.send_input(b"\x16");
+                        }
+                    });
+                });
+            }
             let ended = a.ended.clone();
             let id = s.id.clone();
             p.attached = Some(daemon::attach(&v, &s.id, AttachMode::Control, move |_| ended(&id)));

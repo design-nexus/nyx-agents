@@ -1107,6 +1107,7 @@ dependencies = [
  "nyx-agents-proto",
  "nyx-pty",
  "nyx-term",
+ "serde",
  "serde_json",
  "toml 0.9.12+spec-1.1.0",
  "zbus",

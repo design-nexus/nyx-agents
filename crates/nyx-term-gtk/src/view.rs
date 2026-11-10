@@ -62,6 +62,7 @@ struct Handlers {
     bell: Handler<()>,
     notification: Handler<(String, String)>,
     frame: Handler<Stats>,
+    image_paste: Handler<()>,
 }
 
 struct State {
@@ -242,6 +243,19 @@ impl TerminalView {
     /// Bytes for the program: keys, mouse reports, pastes and query replies.
     pub fn connect_input(&self, f: impl Fn(&[u8]) + 'static) {
         self.imp().handlers.input.borrow_mut().push(Box::new(f));
+    }
+
+    /// Ctrl+V with only an image on the clipboard. Without a handler the key
+    /// goes to the program (which reads the image itself); with one, the
+    /// handler does that once it has made the image readable, through
+    /// [`TerminalView::send_input`].
+    pub fn connect_image_paste(&self, f: impl Fn(&()) + 'static) {
+        self.imp().handlers.image_paste.borrow_mut().push(Box::new(f));
+    }
+
+    /// Bytes for the program, as if typed.
+    pub fn send_input(&self, bytes: &[u8]) {
+        self.send(bytes);
     }
 
     /// The grid changed: (cols, rows, width px, height px).
@@ -831,6 +845,10 @@ impl TerminalView {
             // through, so programs that read images themselves (Claude Code) get it.
             if ctrl_only && lower == gdk::Key::v && has_text(&self.clipboard().formats()) {
                 self.paste_clipboard();
+                return glib::Propagation::Stop;
+            }
+            if ctrl_only && lower == gdk::Key::v && !self.imp().handlers.image_paste.borrow().is_empty() {
+                Self::emit(&self.imp().handlers.image_paste, &());
                 return glib::Propagation::Stop;
             }
             if state.contains(M::SHIFT_MASK) && !state.contains(M::CONTROL_MASK) {

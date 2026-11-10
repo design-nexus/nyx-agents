@@ -3,6 +3,8 @@
 //!   nyx-agentd [serve]                      the manager (systemd starts it on first use)
 //!   nyx-agentd hold --id ID [--cols N --rows N] --cwd DIR -- ARGV...
 //!                                           one session's holder (started by the manager)
+//!   nyx-agentd ws-hold --id ID [--name N --width W --height H --scale S]
+//!                                           one agent workspace's holder (started by the manager)
 //!
 //! Holders own each agent's pty in their own process and session, so agents
 //! keep running when the app closes and when the manager restarts; the
@@ -16,12 +18,14 @@ mod notify;
 mod peer;
 mod server;
 mod workspaces;
+mod ws_holder;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let code = match args.get(1).map(String::as_str) {
         None | Some("serve") => server::run(),
         Some("hold") => holder::run(&args[2..]),
+        Some("ws-hold") => ws_holder::run(&args[2..]),
         Some("-h" | "--help") => {
             println!("usage: nyx-agentd [serve] | nyx-agentd hold --id ID --cwd DIR -- ARGV...");
             0

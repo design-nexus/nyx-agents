@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use nyx_agent_workspace::{Capturer, Input, Instance, Options, png};
+use nyx_agent_workspace::{Capturer, Clipboard, Input, Instance, Options, png};
 
 fn hyprctl(what: &str) -> Option<String> {
     let out = Command::new("hyprctl").args([what, "-j"]).output().ok()?;
@@ -48,7 +48,30 @@ fn a_workspace_runs_foot_and_takes_input() {
     let log = std::fs::read_to_string(&ws.log).unwrap_or_default();
     assert!(log.contains("headless"), "sway should report the headless backend:\n{log}");
 
-    ws.launch(&["foot".into()], None).expect("foot starts");
+    if ws.display.is_none() {
+        let log = std::fs::read_to_string(&ws.log).unwrap_or_default();
+        eprintln!(
+            "{}",
+            log.lines().filter(|l| l.to_lowercase().contains("xwayland") || l.contains("ERROR")).collect::<Vec<_>>().join("\n")
+        );
+        eprintln!(
+            "{} log lines; X11 sockets: {:?}",
+            log.lines().count(),
+            std::fs::read_dir("/tmp/.X11-unix").map(|d| d.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+        );
+        let fds: Vec<String> = std::fs::read_dir(format!("/proc/{}/fd", ws.sway_pid()))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| std::fs::read_link(e.path()).ok())
+            .map(|p| p.display().to_string())
+            .collect();
+        eprintln!("sway fds: {fds:?}");
+    }
+    assert!(ws.display.as_deref().is_some_and(|d| d.starts_with(':')), "X11 programs get a display: {:?}", ws.display);
+    let typed = runtime.parent().unwrap().join("typed.txt");
+    let cat = format!("cat > {}", typed.display());
+    ws.launch(&["foot".into(), "--".into(), "sh".into(), "-c".into(), cat], None).expect("foot starts");
     let start = Instant::now();
     let foot = loop {
         if let Some(w) = ws.windows().unwrap().into_iter().find(|w| w.app_id.as_deref() == Some("foot")) {
@@ -62,9 +85,28 @@ fn a_workspace_runs_foot_and_takes_input() {
     let (w, h) = Options::default().logical();
     let mut input = Input::connect(&ws.wayland, w, h).expect("virtual input");
     input.click(Some((foot.x + 50, foot.y + 50)), nyx_agent_workspace::Button::Left, 1).unwrap();
-    input.type_text("echo nyx-agent-workspace-ok\n").unwrap();
-    input.key("ctrl+l").unwrap();
+    // Keys land on a US layout's keycodes, punctuation and shifted keys included.
+    let line = "Hello, World! ~/x_y=1+2 [ok] \"q\" <a|b> é\n";
+    input.type_text(line).unwrap();
+    input.key("ctrl+d").unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(std::fs::read_to_string(&typed).unwrap_or_default(), line, "typed text arrives as typed");
     assert_eq!(input.position(), ((foot.x + 50) as u32, (foot.y + 50) as u32));
+
+    // cat has ended and foot with it; open another to have something on screen.
+    ws.launch(&["foot".into()], None).expect("foot starts again");
+    let start = Instant::now();
+    while !ws.windows().unwrap().iter().any(|w| w.app_id.as_deref() == Some("foot")) {
+        assert!(start.elapsed() < Duration::from_secs(10), "the second foot never mapped");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+
+    let writer = Clipboard::connect(&ws.wayland).expect("clipboard");
+    writer.set_text("from the test").unwrap();
+    let reader = Clipboard::connect(&ws.wayland).expect("a second clipboard client");
+    assert_eq!(reader.get_text().unwrap().as_deref(), Some("from the test"), "the clipboard passes between clients");
+    drop((writer, reader));
 
     let mut cap = Capturer::connect(&ws.wayland).expect("capture");
     let frame = cap.capture().expect("a frame");

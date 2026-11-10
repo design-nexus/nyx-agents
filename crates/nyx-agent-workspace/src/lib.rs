@@ -19,6 +19,7 @@
 //! keyboard events, and [`Capturer`] copies the output into memory.
 
 mod capture;
+mod clipboard;
 mod input;
 mod instance;
 mod ipc;
@@ -26,7 +27,8 @@ pub mod keys;
 mod spawn;
 mod wl;
 
-pub use capture::{Capturer, Frame, base64, png, shrink};
+pub use capture::{Capturer, Frame, base64, png, shrink, unbase64};
+pub use clipboard::{Clipboard, TEXT_TYPES};
 pub use input::{Button, Input};
-pub use instance::{Instance, Options, app_env, isolate_argv, sway_config, sway_env};
+pub use instance::{Instance, Options, app_env, bus_config, isolate_argv, remove_tree, sway_config, sway_env, x_display};
 pub use ipc::{Ipc, Window, windows};

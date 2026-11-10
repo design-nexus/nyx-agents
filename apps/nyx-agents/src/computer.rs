@@ -1,6 +1,14 @@
-//! `nyx-agents computer --workspace ID`: computer-use tools for one agent
+//! `nyx-agents computer [--workspace ID]`: computer-use tools for one agent
 //! workspace, as an MCP server on stdin and stdout (newline-delimited
 //! JSON-RPC). Harnesses start it for sessions that have a workspace.
+//!
+//! Without `--workspace` it finds the workspace of the session it runs under
+//! (`NYX_AGENT_WORKSPACE` or `NYX_AGENTS_SESSION`, in its own environment or a
+//! parent's), so one entry in a harness's global MCP config serves every
+//! session. A session without a workspace gets no tools.
+//!
+//!   nyx-agents computer register [HARNESS...]   add that entry to harnesses
+//!                                               that only read MCP servers from config
 //!
 //! It only talks to the manager, which owns the workspace; it never reaches
 //! the user's desktop.
@@ -84,12 +92,45 @@ fn tools() -> Value {
           "inputSchema": { "type": "object", "properties": {
               "width": { "type": "integer" }, "height": { "type": "integer" } }, "required": ["width", "height"] },
           "annotations": act },
+        { "name": "get_clipboard", "description": "The text on the workspace's clipboard (what a program there copied).",
+          "inputSchema": { "type": "object", "properties": {} }, "annotations": read },
+        { "name": "set_clipboard", "description": "Put text on the workspace's clipboard, for pasting into a program there.",
+          "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
+          "annotations": act },
     ])
 }
 
 struct Server {
-    workspace: String,
+    workspace: Option<String>,
     client: Option<Client>,
+}
+
+/// The workspace of the session this process runs under, from its own
+/// environment or the nearest parent's that names one.
+fn find_workspace(c: &mut Client) -> Option<String> {
+    let mut pid = std::process::id();
+    for _ in 0..32 {
+        let env = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
+        let get = |key: &str| {
+            env.split(|b| *b == 0)
+                .find_map(|kv| kv.strip_prefix(key.as_bytes())?.strip_prefix(b"="))
+                .map(|v| String::from_utf8_lossy(v).into_owned())
+        };
+        if let Some(w) = get("NYX_AGENT_WORKSPACE").filter(|w| !w.is_empty()) {
+            return Some(w);
+        }
+        if let Some(s) = get("NYX_AGENTS_SESSION") {
+            return c.session(&s).ok()?.workspace;
+        }
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        // The parent pid follows the command name, which may itself hold spaces.
+        let ppid: u32 = stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse().ok()?;
+        if ppid <= 1 {
+            return None;
+        }
+        pid = ppid;
+    }
+    None
 }
 
 type ToolResult = Result<Vec<Value>, String>;
@@ -107,6 +148,10 @@ fn need(args: &Value, k: &str) -> Result<i32, String> {
 }
 
 impl Server {
+    fn ws(&self) -> Result<String, String> {
+        self.workspace.clone().ok_or_else(|| "this session has no agent workspace".to_string())
+    }
+
     fn call<T: serde::de::DeserializeOwned>(&mut self, call: Call) -> Result<T, String> {
         if self.client.is_none() {
             self.client = Some(Client::connect("nyx-agents-computer").map_err(|e| e.to_string())?);
@@ -119,8 +164,7 @@ impl Server {
     }
 
     fn screenshot(&mut self) -> ToolResult {
-        let s: Screenshot =
-            self.call(Call::CaptureWorkspace { id: self.workspace.clone(), max_width: None, max_height: None })?;
+        let s: Screenshot = self.call(Call::CaptureWorkspace { id: self.ws()?, max_width: None, max_height: None })?;
         Ok(vec![
             json!({ "type": "image", "data": s.png, "mimeType": "image/png" }),
             text(format!("{}×{} pixels", s.width, s.height)),
@@ -128,7 +172,7 @@ impl Server {
     }
 
     fn input(&mut self, actions: Vec<InputAction>) -> Result<String, String> {
-        let r: Value = self.call(Call::WorkspaceInput { id: self.workspace.clone(), actions })?;
+        let r: Value = self.call(Call::WorkspaceInput { id: self.ws()?, actions })?;
         Ok(format!("Done; the pointer is at {}, {}.", r["x"], r["y"]))
     }
 
@@ -170,24 +214,32 @@ impl Server {
                     .map(|a| a.as_str().map(String::from).ok_or("argv must be strings"))
                     .collect::<Result<_, _>>()?;
                 let cwd = args["cwd"].as_str().map(String::from);
-                let r: Value = self.call(Call::LaunchInWorkspace { id: self.workspace.clone(), argv, cwd })?;
+                let r: Value = self.call(Call::LaunchInWorkspace { id: self.ws()?, argv, cwd })?;
                 // Give the window a moment to appear before any screenshot.
                 std::thread::sleep(Duration::from_millis(1500));
                 vec![text(format!("Started (pid {}).", r["pid"]))]
             }
             "list_windows" => {
-                let list: Vec<WorkspaceWindow> = self.call(Call::WorkspaceWindows { id: self.workspace.clone() })?;
+                let list: Vec<WorkspaceWindow> = self.call(Call::WorkspaceWindows { id: self.ws()? })?;
                 return Ok(vec![text(serde_json::to_string_pretty(&list).unwrap())]);
             }
             "focus_window" => {
                 let window = args["window"].as_i64().ok_or("window is required")?;
-                self.call::<Value>(Call::FocusWindow { id: self.workspace.clone(), window })?;
+                self.call::<Value>(Call::FocusWindow { id: self.ws()?, window })?;
                 vec![text("Focused.")]
+            }
+            "get_clipboard" => {
+                let r: Value = self.call(Call::WorkspaceClipboardGet { id: self.ws()?, image: false })?;
+                return Ok(vec![text(r["text"].as_str().unwrap_or("The clipboard is empty."))]);
+            }
+            "set_clipboard" => {
+                let t = args["text"].as_str().ok_or("text is required")?.to_string();
+                self.call::<Value>(Call::WorkspaceClipboardSet { id: self.ws()?, text: Some(t), png: None })?;
+                vec![text("On the clipboard.")]
             }
             "resize_screen" => {
                 let (width, height) = (need(args, "width")? as u32, need(args, "height")? as u32);
-                let w: AgentWorkspace =
-                    self.call(Call::ResizeWorkspace { id: self.workspace.clone(), width, height, scale: None })?;
+                let w: AgentWorkspace = self.call(Call::ResizeWorkspace { id: self.ws()?, width, height, scale: None })?;
                 return Ok(vec![text(format!("The workspace is now {}×{}.", w.width, w.height))]);
             }
             other => return Err(format!("unknown tool {other}")),
@@ -202,7 +254,12 @@ impl Server {
     fn handle(&mut self, method: &str, params: &Value) -> Result<Value, (i64, String)> {
         match method {
             "initialize" => {
-                let w: Option<AgentWorkspace> = self.call(Call::GetWorkspace { id: self.workspace.clone() }).ok();
+                if self.workspace.is_none()
+                    && let Ok(mut c) = Client::connect("nyx-agents-computer")
+                {
+                    self.workspace = find_workspace(&mut c);
+                }
+                let w: Option<AgentWorkspace> = self.ws().ok().and_then(|id| self.call(Call::GetWorkspace { id }).ok());
                 let version = params["protocolVersion"].as_str().unwrap_or(PROTOCOL);
                 Ok(json!({
                     "protocolVersion": version,
@@ -212,7 +269,7 @@ impl Server {
                 }))
             }
             "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({ "tools": tools() })),
+            "tools/list" => Ok(json!({ "tools": if self.workspace.is_some() { tools() } else { json!([]) } })),
             "tools/call" => {
                 let name = params["name"].as_str().unwrap_or_default();
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));
@@ -227,12 +284,16 @@ impl Server {
 }
 
 pub fn run(args: &[String]) -> i32 {
+    if args.first().is_some_and(|a| a == "register") {
+        return crate::register::run(&args[1..]);
+    }
     let workspace = match args.iter().position(|a| a == "--workspace").and_then(|i| args.get(i + 1)) {
-        Some(w) if nyx_agents_core::store::valid_id(w) => w.clone(),
-        _ => {
-            eprintln!("usage: nyx-agents computer --workspace ID   (an MCP server on stdio)");
+        Some(w) if nyx_agents_core::store::valid_id(w) => Some(w.clone()),
+        Some(_) => {
+            eprintln!("usage: nyx-agents computer [--workspace ID]   (an MCP server on stdio)");
             return 2;
         }
+        None => None,
     };
     let mut server = Server { workspace, client: None };
     let stdin = std::io::stdin();
@@ -283,12 +344,16 @@ mod tests {
 
     #[test]
     fn unknown_methods_and_tools_are_errors() {
-        let mut s = Server { workspace: "w".into(), client: None };
+        let mut s = Server { workspace: Some("w".into()), client: None };
         assert_eq!(s.handle("nope", &json!({})).unwrap_err().0, -32601);
         let r = s.handle("tools/call", &json!({ "name": "teleport", "arguments": {} })).unwrap();
         assert_eq!(r["isError"], true);
         let r = s.handle("tools/call", &json!({ "name": "move", "arguments": {} })).unwrap();
         assert_eq!(r["content"][0]["text"], "x is required");
         assert!(s.handle("tools/list", &json!({})).unwrap()["tools"].is_array());
+        let mut none = Server { workspace: None, client: None };
+        assert_eq!(none.handle("tools/list", &json!({})).unwrap()["tools"], json!([]));
+        let r = none.handle("tools/call", &json!({ "name": "screenshot", "arguments": {} })).unwrap();
+        assert_eq!(r["content"][0]["text"], "this session has no agent workspace");
     }
 }

@@ -46,3 +46,9 @@ pub fn run() -> i32 {
     app.connect_shutdown(|_| prefs::flush());
     i32::from(app.run())
 }
+
+/// The clipboard holds text, from this app or another.
+pub fn text_on(f: &gtk::gdk::ContentFormats) -> bool {
+    f.contains_type(gtk::glib::Type::STRING)
+        || ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING", "TEXT"].iter().any(|m| f.contain_mime_type(m))
+}

@@ -18,6 +18,7 @@
 
 mod cli;
 mod computer;
+mod register;
 mod settings;
 mod ui;
 
