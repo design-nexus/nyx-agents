@@ -36,6 +36,10 @@ pub fn new_uuid() -> String {
     format!("{}-{}-{}-{}-{}", &s[0..8], &s[8..12], &s[12..16], &s[16..20], &s[20..32])
 }
 
+/// Tests that change environment variables hold this, so they don't race.
+#[cfg(test)]
+pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     #[test]

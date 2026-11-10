@@ -73,6 +73,7 @@ mod tests {
 
     #[test]
     fn creates_and_removes_only_clean_worktrees() {
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let t = tempfile::tempdir().unwrap();
         // SAFETY: no other test in this module reads XDG_DATA_HOME.
         unsafe { std::env::set_var("XDG_DATA_HOME", t.path().join("data")) };

@@ -271,6 +271,7 @@ mod tests {
 
     #[test]
     fn finds_sessions_and_follows_subagents() {
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let t = tempfile::tempdir().unwrap();
         // SAFETY: no other test in this module reads CODEX_HOME.
         unsafe { std::env::set_var("CODEX_HOME", t.path()) };

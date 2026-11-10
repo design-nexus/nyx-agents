@@ -55,7 +55,7 @@ const BUILTINS: &[Builtin] = &[
         mise: &["antigravity-cli"],
         auth_files: &[],
         auth_env: &[],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
     Builtin {
         id: "omp",
@@ -64,7 +64,7 @@ const BUILTINS: &[Builtin] = &[
         mise: &["oh-my-pi"],
         auth_files: &[],
         auth_env: &[],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
     Builtin {
         id: "muse",

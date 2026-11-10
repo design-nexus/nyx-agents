@@ -95,6 +95,7 @@ mod tests {
 
     #[test]
     fn finds_the_new_opencode_session_in_the_folder() {
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let t = tempfile::tempdir().unwrap();
         // SAFETY: no other test reads XDG_DATA_HOME for OpenCode.
         unsafe { std::env::set_var("XDG_DATA_HOME", t.path()) };

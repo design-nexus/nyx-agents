@@ -300,6 +300,7 @@ mod tests {
 
     #[test]
     fn follows_subagents_to_completion() {
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         // SAFETY: tests in this module don't run threads that read HOME.
         unsafe { std::env::set_var("HOME", home.path()) };
