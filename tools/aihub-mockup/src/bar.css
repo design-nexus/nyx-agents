@@ -1,0 +1,86 @@
+/* Nyx Bar. Solid surface, no glass (Nyx Design 2.0). */
+
+window.nyx-bar {
+  background-color: @theme_panel;
+  color: @theme_text;
+  border-bottom: 1px solid @hairline;
+}
+
+.bar-sections {
+  padding: 0 6px;
+}
+
+.bar-left,
+.bar-center,
+.bar-right {
+  min-height: 0;
+}
+
+.bar-item {
+  padding: 0 7px;
+  margin: 4px 1px;
+  border-radius: 7px;
+  transition: background-color 120ms ease;
+}
+
+.bar-item:hover {
+  background-color: @row_hover;
+}
+
+.bar-item.open {
+  background-color: mix(@theme_panel, @theme_accent, 0.18);
+}
+
+.bar-item label {
+  font-feature-settings: "tnum";
+}
+
+.bar-item image {
+  -gtk-icon-size: 16px;
+}
+
+/* Classes plugins may use on items and nodes. */
+.accent { color: @theme_accent; }
+.success { color: @theme_success; }
+.warning { color: @theme_warning; }
+.danger { color: @theme_danger; }
+.dim { color: @theme_dim_text; }
+.active { color: @theme_accent; font-weight: 600; }
+.urgent { color: @theme_danger; font-weight: 600; }
+
+.plugin-badge {
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 14px;
+  min-height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background-color: @theme_accent;
+  color: @theme_on_accent;
+}
+
+levelbar.plugin-progress block.filled {
+  background-color: @theme_accent;
+  border-radius: 2px;
+}
+
+levelbar.plugin-progress block.empty {
+  background-color: @track;
+  border-radius: 2px;
+}
+
+popover.nyx-bar-popover > contents {
+  background-color: @theme_popover;
+  border-radius: 15px;
+  padding: 12px;
+  box-shadow: 0 6px 24px alpha(@theme_shadow, 0.35);
+}
+
+popover.nyx-bar-popover .plugin-row {
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+
+popover.nyx-bar-popover .plugin-row:hover {
+  background-color: @row_hover;
+}

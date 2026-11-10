@@ -1,0 +1,1372 @@
+{
+ "node": "box",
+ "orientation": "vertical",
+ "spacing": 8,
+ "align": "fill",
+ "children": [
+  {
+   "node": "box",
+   "orientation": "horizontal",
+   "spacing": 4,
+   "align": "center",
+   "children": [
+    {
+     "node": "button",
+     "icon": "go-previous-symbolic",
+     "label": "Usage",
+     "action": "tab:usage",
+     "class": [
+      "back"
+     ]
+    },
+    {
+     "node": "label",
+     "text": "",
+     "expand": true
+    },
+    {
+     "node": "button",
+     "icon": "list-add-symbolic",
+     "action": "new:claude",
+     "tooltip": "New Claude Code session"
+    },
+    {
+     "node": "button",
+     "icon": "view-refresh-symbolic",
+     "action": "refresh:claude",
+     "tooltip": "Refresh"
+    }
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "horizontal",
+   "spacing": 12,
+   "align": "center",
+   "children": [
+    {
+     "node": "icon",
+     "name": "/plugin/icons/claude.svg",
+     "size": 32
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 8,
+       "align": "center",
+       "children": [
+        {
+         "node": "label",
+         "text": "<b>Claude Code</b>",
+         "markup": true,
+         "class": [
+          "agent-name"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "Working",
+         "class": [
+          "chip",
+          "ok"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "label",
+       "text": "Claude Opus 5.5 · Max plan · updated just now",
+       "class": [
+        "dim"
+       ]
+      }
+     ]
+    }
+   ],
+   "margin": [
+    0,
+    4,
+    4,
+    4
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "<b>Today</b>",
+       "markup": true,
+       "expand": true
+      }
+     ],
+     "margin": [
+      8,
+      12,
+      4,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 0,
+     "align": "center",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "vertical",
+       "align": "center",
+       "expand": true,
+       "children": [
+        {
+         "node": "label",
+         "text": "38",
+         "class": [
+          "stat"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "prompts",
+         "class": [
+          "dim",
+          "small"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "box",
+       "orientation": "vertical",
+       "align": "center",
+       "expand": true,
+       "children": [
+        {
+         "node": "label",
+         "text": "543",
+         "class": [
+          "stat"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "steps",
+         "class": [
+          "dim",
+          "small"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "box",
+       "orientation": "vertical",
+       "align": "center",
+       "expand": true,
+       "children": [
+        {
+         "node": "label",
+         "text": "1.1 B",
+         "class": [
+          "stat"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "tokens",
+         "class": [
+          "dim",
+          "small"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "box",
+       "orientation": "vertical",
+       "align": "center",
+       "expand": true,
+       "children": [
+        {
+         "node": "label",
+         "text": "912 M",
+         "class": [
+          "stat"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "cached",
+         "class": [
+          "dim",
+          "small"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "box",
+       "orientation": "vertical",
+       "align": "center",
+       "expand": true,
+       "children": [
+        {
+         "node": "label",
+         "text": "118",
+         "class": [
+          "stat"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "all prompts",
+         "class": [
+          "dim",
+          "small"
+         ]
+        }
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      6,
+      10,
+      6
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "<b>Quotas</b>",
+       "markup": true,
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "Max",
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      8,
+      12,
+      4,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 8,
+       "align": "center",
+       "children": [
+        {
+         "node": "label",
+         "text": "5-hour window",
+         "expand": true
+        },
+        {
+         "node": "label",
+         "text": "resets 7:40 PM · in 4 h 38 min",
+         "class": [
+          "dim"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "<b>96% left</b>",
+         "markup": true
+        }
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.96,
+       "class": [
+        "meter"
+       ],
+       "margin": [
+        4,
+        0,
+        3,
+        0
+       ]
+      },
+      {
+       "node": "label",
+       "text": "Paced to reset",
+       "class": [
+        "dim",
+        "small"
+       ]
+      }
+     ],
+     "margin": [
+      6,
+      12,
+      6,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 8,
+       "align": "center",
+       "children": [
+        {
+         "node": "label",
+         "text": "Weekly",
+         "expand": true
+        },
+        {
+         "node": "label",
+         "text": "resets Fri 4:00 AM · in 2 d 12 h",
+         "class": [
+          "dim"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "<b>52% left</b>",
+         "markup": true
+        }
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.52,
+       "class": [
+        "meter"
+       ],
+       "margin": [
+        4,
+        0,
+        3,
+        0
+       ]
+      },
+      {
+       "node": "label",
+       "text": "Burns 0.5% an hour · on pace · about 22% left at reset",
+       "class": [
+        "dim",
+        "small"
+       ]
+      }
+     ],
+     "margin": [
+      6,
+      12,
+      6,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 8,
+       "align": "center",
+       "children": [
+        {
+         "node": "label",
+         "text": "Weekly, Opus",
+         "expand": true
+        },
+        {
+         "node": "label",
+         "text": "resets Fri 4:00 AM",
+         "class": [
+          "dim"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "<b>71% left</b>",
+         "markup": true
+        }
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.71,
+       "class": [
+        "meter"
+       ],
+       "margin": [
+        4,
+        0,
+        3,
+        0
+       ]
+      },
+      {
+       "node": "label",
+       "text": "Burns 0.3% an hour · on pace",
+       "class": [
+        "dim",
+        "small"
+       ]
+      }
+     ],
+     "margin": [
+      6,
+      12,
+      6,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "height": 4
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "<b>Models</b>",
+       "markup": true,
+       "expand": true
+      },
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 2,
+       "align": "center",
+       "children": [
+        {
+         "node": "button",
+         "label": "Today",
+         "action": "models:today",
+         "class": [
+          "tab",
+          "on"
+         ]
+        },
+        {
+         "node": "button",
+         "label": "7 days",
+         "action": "models:week",
+         "class": [
+          "tab"
+         ]
+        },
+        {
+         "node": "button",
+         "label": "All time",
+         "action": "models:all",
+         "class": [
+          "tab"
+         ]
+        }
+       ],
+       "class": [
+        "tabs",
+        "small"
+       ]
+      }
+     ],
+     "margin": [
+      8,
+      12,
+      4,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 8,
+       "align": "center",
+       "children": [
+        {
+         "node": "label",
+         "text": "Claude Opus 5.5",
+         "expand": true
+        },
+        {
+         "node": "label",
+         "text": "38 prompts · 526 steps",
+         "class": [
+          "dim"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "<b>100%</b>",
+         "markup": true
+        }
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 1.0,
+       "class": [
+        "meter"
+       ],
+       "margin": [
+        4,
+        0,
+        0,
+        0
+       ]
+      }
+     ],
+     "margin": [
+      4,
+      12,
+      6,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 8,
+       "align": "center",
+       "children": [
+        {
+         "node": "label",
+         "text": "Claude Sonnet 5",
+         "expand": true
+        },
+        {
+         "node": "label",
+         "text": "0 prompts · 17 steps (subagents)",
+         "class": [
+          "dim"
+         ]
+        },
+        {
+         "node": "label",
+         "text": "<b>0%</b>",
+         "markup": true
+        }
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.0,
+       "class": [
+        "meter"
+       ],
+       "margin": [
+        4,
+        0,
+        0,
+        0
+       ]
+      }
+     ],
+     "margin": [
+      4,
+      12,
+      6,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "height": 4
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "<b>Last 7 days</b>",
+       "markup": true,
+       "expand": true
+      }
+     ],
+     "margin": [
+      8,
+      12,
+      4,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Today",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.6031746031746031,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "38 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Mon 11/09",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 1.0,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "63 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Sun 11/08",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.2698412698412698,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "17 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Sat 11/07",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.0,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "0 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Fri 11/06",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.6507936507936508,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "41 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Thu 11/05",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.3492063492063492,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "22 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Wed 11/04",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.14285714285714285,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "9 prompts",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "height": 8
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "<b>Top tools</b>",
+       "markup": true,
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "today",
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      8,
+      12,
+      4,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Bash",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 1.0,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "214 calls",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Read",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.7476635514018691,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "160 calls",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Edit",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.45794392523364486,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "98 calls",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Grep",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.2850467289719626,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "61 calls",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Agent",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.056074766355140186,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "12 calls",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "WebFetch",
+       "width": 70,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.018691588785046728,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "4 calls",
+       "width": 86
+      }
+     ],
+     "margin": [
+      2,
+      12,
+      2,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "height": 8
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "<b>Recent sessions</b>",
+       "markup": true,
+       "expand": true
+      }
+     ],
+     "margin": [
+      8,
+      12,
+      4,
+      12
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 4,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/claude.svg",
+       "title": "Inspector polish",
+       "subtitle": "nyx-agents · 14 min ago · 526 steps · running",
+       "action": "resume:c41d",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "icon": "utilities-terminal-symbolic",
+       "action": "terminal:c41d",
+       "tooltip": "Resume in a terminal",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 4,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/claude.svg",
+       "title": "Agent workspaces API",
+       "subtitle": "nyx-hyprland · yesterday 21:40 · 1,204 steps",
+       "action": "resume:a9e0",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "icon": "utilities-terminal-symbolic",
+       "action": "terminal:a9e0",
+       "tooltip": "Resume in a terminal",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 4,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/claude.svg",
+       "title": "Theme token audit",
+       "subtitle": "nyx-design · yesterday 17:02 · 318 steps",
+       "action": "resume:77b1",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "icon": "utilities-terminal-symbolic",
+       "action": "terminal:77b1",
+       "tooltip": "Resume in a terminal",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 4,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/claude.svg",
+       "title": "Glimpse plugin URLs",
+       "subtitle": "nyx-glimpse · Sun · 211 steps",
+       "action": "resume:5c3e",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "icon": "utilities-terminal-symbolic",
+       "action": "terminal:5c3e",
+       "tooltip": "Resume in a terminal",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 4,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/claude.svg",
+       "title": "Bench the renderer",
+       "subtitle": "nyx-agents · Sat · 940 steps",
+       "action": "resume:0f12",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "icon": "utilities-terminal-symbolic",
+       "action": "terminal:0f12",
+       "tooltip": "Resume in a terminal",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 8,
+     "align": "center",
+     "children": [
+      {
+       "node": "button",
+       "label": "All Claude Code sessions",
+       "action": "sessions:claude",
+       "class": [
+        "flat"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      6,
+      6,
+      6
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  }
+ ]
+}

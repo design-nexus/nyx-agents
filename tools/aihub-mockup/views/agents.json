@@ -1,0 +1,74 @@
+{
+  "node": "box", "orientation": "vertical", "align": "fill", "spacing": 8, "class": ["hub"],
+  "children": [
+    { "node": "box", "orientation": "horizontal", "spacing": 10, "align": "center", "children": [
+      { "node": "vector", "width": 28, "height": 28, "view_box": [0, 0, 24, 24], "commands": [
+        { "op": "path", "d": "M11 3C11.6 8.4 14.6 11.4 20 12C14.6 12.6 11.6 15.6 11 21C10.4 15.6 7.4 12.6 2 12C7.4 11.4 10.4 8.4 11 3Z",
+          "fill": { "linear": { "x1": 2, "y1": 3, "x2": 20, "y2": 21, "stops": [[0, "accent"], [1, "success"]] } } },
+        { "op": "path", "d": "M19.5 1.5C19.75 3.1 20.9 4.25 22.5 4.5C20.9 4.75 19.75 5.9 19.5 7.5C19.25 5.9 18.1 4.75 16.5 4.5C18.1 4.25 19.25 3.1 19.5 1.5Z", "fill": "accent" }
+      ] },
+      { "node": "box", "orientation": "vertical", "align": "fill", "expand": true, "children": [
+        { "node": "label", "text": "AI Hub", "class": ["title"] },
+        { "node": "label", "text": "5 agents · 1 needs you · 3 subagents", "class": ["dim"] }
+      ] },
+      { "node": "button", "icon": "list-add-symbolic", "action": "new", "tooltip": "New agent…" },
+      { "node": "button", "icon": "utilities-terminal-symbolic", "label": "Agents", "action": "open-app" }
+    ] },
+    { "node": "box", "orientation": "horizontal", "spacing": 2, "class": ["tabs"], "children": [
+      { "node": "button", "label": "Agents", "action": "tab:agents", "class": ["tab", "on"], "expand": true },
+      { "node": "button", "label": "Usage", "action": "tab:usage", "class": ["tab"], "expand": true },
+      { "node": "button", "label": "Sessions", "action": "tab:sessions", "class": ["tab"], "expand": true },
+      { "node": "button", "label": "Local AI", "action": "tab:local", "class": ["tab"], "expand": true }
+    ] },
+
+    { "node": "label", "text": "NEEDS YOU", "class": ["section"] },
+    { "node": "box", "orientation": "vertical", "align": "fill", "class": ["card", "attention"], "children": [
+      { "node": "box", "orientation": "horizontal", "align": "center", "children": [
+        { "node": "row", "icon": "/plugin/icons/codex.svg", "title": "Fix the CSV parser", "subtitle": "Codex CLI · nyx-files · agents/fix-parser · 2 min", "action": "open:7f3a", "expand": true },
+        { "node": "label", "text": "approval", "class": ["chip", "bad", "trail"] }
+      ] },
+      { "node": "label", "text": "Run <tt>cargo test --bin nyx-files parser</tt>?", "markup": true, "class": ["ask"] },
+      { "node": "box", "orientation": "horizontal", "spacing": 6, "margin": [0, 10, 8, 36], "children": [
+        { "node": "button", "label": "Open", "action": "open:7f3a", "class": ["suggested-action"] },
+        { "node": "button", "label": "Stop", "action": "stop:7f3a" }
+      ] }
+    ] },
+
+    { "node": "label", "text": "WORKING", "class": ["section"] },
+    { "node": "box", "orientation": "vertical", "align": "fill", "class": ["card"], "children": [
+      { "node": "box", "orientation": "horizontal", "align": "center", "children": [
+        { "node": "row", "icon": "/plugin/icons/claude.svg", "title": "Inspector polish", "subtitle": "Claude Code · nyx-agents · main · turn 6 · 14 min", "action": "open:c41d", "expand": true },
+        { "node": "box", "orientation": "horizontal", "spacing": 8, "align": "center", "class": ["trail"], "children": [
+          { "node": "label", "text": "3 subagents", "width": 82, "class": ["chip"] },
+          { "node": "spinner" }
+        ] }
+      ] },
+      { "node": "box", "orientation": "horizontal", "align": "center", "children": [
+        { "node": "row", "icon": "/plugin/icons/grok.svg", "title": "Landing page copy", "subtitle": "Grok Build · website · agents/copy · 6 min", "action": "open:9b20", "expand": true },
+        { "node": "spinner", "class": ["trail"] }
+      ] }
+    ] },
+
+    { "node": "label", "text": "RECENT", "class": ["section"] },
+    { "node": "box", "orientation": "vertical", "align": "fill", "class": ["card"], "children": [
+      { "node": "box", "orientation": "horizontal", "align": "center", "children": [
+        { "node": "row", "icon": "/plugin/icons/opencode.svg", "title": "Update the plugin docs", "subtitle": "OpenCode · nyx-bar · finished 3 min ago", "action": "open:51e8", "expand": true },
+        { "node": "label", "text": "done", "class": ["chip", "ok", "trail"] }
+      ] },
+      { "node": "box", "orientation": "horizontal", "align": "center", "children": [
+        { "node": "row", "icon": "/plugin/icons/hermes.svg", "title": "Release notes draft", "subtitle": "Hermes · nyx-packages · stopped 1 h ago · resumable", "action": "resume:0c77", "expand": true },
+        { "node": "button", "icon": "media-playback-start-symbolic", "action": "resume:0c77", "tooltip": "Resume", "class": ["trail"] }
+      ] }
+    ] },
+
+    { "node": "separator" },
+    { "node": "box", "orientation": "horizontal", "spacing": 10, "align": "center", "children": [
+      { "node": "label", "text": "Claude 5 h", "class": ["foot"] },
+      { "node": "progress", "value": 0.42, "width": 60, "class": ["meter"] },
+      { "node": "label", "text": "Codex week", "class": ["foot"] },
+      { "node": "progress", "value": 0.63, "width": 60, "class": ["meter"] },
+      { "node": "label", "text": "", "expand": true },
+      { "node": "label", "text": "AI Core idle", "class": ["foot"] }
+    ] }
+  ]
+}

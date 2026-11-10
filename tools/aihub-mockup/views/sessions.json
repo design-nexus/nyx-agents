@@ -1,0 +1,333 @@
+{
+ "node": "box",
+ "orientation": "vertical",
+ "spacing": 8,
+ "align": "fill",
+ "children": [
+  {
+   "node": "box",
+   "orientation": "horizontal",
+   "spacing": 2,
+   "align": "center",
+   "children": [
+    {
+     "node": "button",
+     "label": "All",
+     "action": "filter:all",
+     "class": [
+      "tab",
+      "on"
+     ]
+    },
+    {
+     "node": "button",
+     "label": "Claude",
+     "action": "filter:claude",
+     "class": [
+      "tab"
+     ]
+    },
+    {
+     "node": "button",
+     "label": "Codex",
+     "action": "filter:codex",
+     "class": [
+      "tab"
+     ]
+    },
+    {
+     "node": "button",
+     "label": "Grok",
+     "action": "filter:grok",
+     "class": [
+      "tab"
+     ]
+    },
+    {
+     "node": "button",
+     "label": "Cursor",
+     "action": "filter:cursor",
+     "class": [
+      "tab"
+     ]
+    },
+    {
+     "node": "button",
+     "label": "OpenCode",
+     "action": "filter:opencode",
+     "class": [
+      "tab"
+     ]
+    },
+    {
+     "node": "button",
+     "icon": "pan-down-symbolic",
+     "action": "filter:more",
+     "tooltip": "More agents",
+     "class": [
+      "tab"
+     ]
+    }
+   ],
+   "class": [
+    "tabs"
+   ]
+  },
+  {
+   "node": "entry",
+   "placeholder": "Search titles and projects"
+  },
+  {
+   "node": "label",
+   "text": "TODAY",
+   "class": [
+    "section"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "row",
+     "id": "s1",
+     "icon": "/plugin/icons/claude.svg",
+     "title": "Inspector polish",
+     "subtitle": "nyx-agents · 14 min ago · running in Nyx Agents",
+     "action": "pick:s1"
+    },
+    {
+     "node": "row",
+     "id": "s2",
+     "icon": "/plugin/icons/codex.svg",
+     "title": "Fix the CSV parser",
+     "subtitle": "nyx-files · 2 min ago · waiting for you",
+     "action": "pick:s2"
+    },
+    {
+     "node": "row",
+     "id": "s3",
+     "icon": "/plugin/icons/opencode.svg",
+     "title": "Update the plugin docs",
+     "subtitle": "nyx-bar · finished 3 min ago",
+     "action": "pick:s3"
+    },
+    {
+     "node": "box",
+     "orientation": "vertical",
+     "spacing": 0,
+     "align": "fill",
+     "children": [
+      {
+       "node": "box",
+       "orientation": "horizontal",
+       "spacing": 4,
+       "align": "center",
+       "children": [
+        {
+         "node": "button",
+         "icon": "media-playback-start-symbolic",
+         "label": "Resume",
+         "action": "resume:s3",
+         "class": [
+          "suggested-action"
+         ]
+        },
+        {
+         "node": "button",
+         "icon": "utilities-terminal-symbolic",
+         "label": "Terminal",
+         "action": "terminal:s3"
+        },
+        {
+         "node": "label",
+         "text": "",
+         "expand": true
+        },
+        {
+         "node": "button",
+         "icon": "view-reveal-symbolic",
+         "action": "peek:s3",
+         "tooltip": "Peek at the transcript"
+        },
+        {
+         "node": "button",
+         "icon": "folder-open-symbolic",
+         "action": "folder:s3",
+         "tooltip": "Open the folder"
+        },
+        {
+         "node": "button",
+         "icon": "edit-copy-symbolic",
+         "action": "copy:s3",
+         "tooltip": "Copy the session ID"
+        },
+        {
+         "node": "button",
+         "icon": "user-trash-symbolic",
+         "action": "trash:s3",
+         "tooltip": "Move to the Trash (click twice)",
+         "class": [
+          "danger"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "label",
+       "text": "~/Projects/nyx-bar · ses_5b1e0c77a2 · Qwen3-8B (local) · 42 steps",
+       "margin": [
+        6,
+        2,
+        0,
+        2
+       ],
+       "class": [
+        "dim",
+        "small"
+       ]
+      }
+     ],
+     "id": "s3-actions",
+     "visible": false,
+     "margin": [
+      2,
+      10,
+      8,
+      36
+     ],
+     "class": [
+      "actions"
+     ]
+    },
+    {
+     "node": "row",
+     "id": "s4",
+     "icon": "/plugin/icons/grok.svg",
+     "title": "Landing page copy",
+     "subtitle": "website · 6 min ago",
+     "action": "pick:s4"
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "label",
+   "text": "YESTERDAY",
+   "class": [
+    "section"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "row",
+     "id": "s5",
+     "icon": "/plugin/icons/claude.svg",
+     "title": "Agent workspaces API",
+     "subtitle": "nyx-hyprland · 21:40",
+     "action": "pick:s5"
+    },
+    {
+     "node": "row",
+     "id": "s6",
+     "icon": "/plugin/icons/cursor.svg",
+     "title": "Theme token audit",
+     "subtitle": "nyx-design · 17:02",
+     "action": "pick:s6"
+    },
+    {
+     "node": "row",
+     "id": "s7",
+     "icon": "/plugin/icons/hermes.svg",
+     "title": "Release notes draft",
+     "subtitle": "nyx-packages · 15:30",
+     "action": "pick:s7"
+    },
+    {
+     "node": "row",
+     "id": "s8",
+     "icon": "/plugin/icons/codex.svg",
+     "title": "Rollout parser tests",
+     "subtitle": "nyx-agents · 11:12",
+     "action": "pick:s8"
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "label",
+   "text": "EARLIER",
+   "class": [
+    "section"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 0,
+   "align": "fill",
+   "children": [
+    {
+     "node": "row",
+     "id": "s9",
+     "icon": "/plugin/icons/omp.svg",
+     "title": "Box-drawing sprites",
+     "subtitle": "nyx-agents · Sun",
+     "action": "pick:s9"
+    },
+    {
+     "node": "row",
+     "id": "s10",
+     "icon": "/plugin/icons/antigravity.svg",
+     "title": "Weather radar tiles",
+     "subtitle": "nyx-weather · Sat",
+     "action": "pick:s10"
+    },
+    {
+     "node": "row",
+     "id": "s11",
+     "icon": "/plugin/icons/muse.svg",
+     "title": "Playlist import",
+     "subtitle": "nyx-music · Fri",
+     "action": "pick:s11"
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "horizontal",
+   "spacing": 8,
+   "align": "center",
+   "children": [
+    {
+     "node": "label",
+     "text": "214 sessions from 9 agents",
+     "expand": true,
+     "class": [
+      "foot"
+     ]
+    },
+    {
+     "node": "button",
+     "icon": "view-refresh-symbolic",
+     "label": "Rescan",
+     "action": "rescan"
+    }
+   ]
+  }
+ ]
+}

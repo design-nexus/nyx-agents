@@ -1,0 +1,988 @@
+/* Nyx Control Center. Colours are the shared @theme_* tokens; radii follow STYLE.md
+ * (7 / 11 / 15). Layout from the approved mockup: a 400 px panel, full height, flush
+ * with the right edge, rounded at the top left. */
+
+window.nyx-control-center,
+window.cc-catcher {
+  /* Not quite transparent: some compositors pass clicks through fully clear pixels. */
+  background: rgba(0, 0, 0, 0.004);
+}
+
+window.nyx-control-center .cc-panel {
+  background: @theme_popover;
+  border: 1px solid @theme_border;
+  border-radius: 15px;
+  padding: 14px 14px 16px;
+  font-family: "Inter", sans-serif;
+  color: @theme_text;
+}
+
+/* ---------- Header ---------- */
+
+window.nyx-control-center .cc-header {
+  min-height: 40px;
+  margin-bottom: 12px;
+}
+
+window.nyx-control-center .cc-avatar {
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 999px;
+  background: @theme_accent;
+  color: @theme_on_accent;
+  font-weight: 600;
+}
+
+window.nyx-control-center .cc-name {
+  font-weight: 500;
+}
+
+window.nyx-control-center .cc-sub {
+  font-size: 12px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center button.cc-icon-button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 7px;
+  background: none;
+  box-shadow: none;
+  color: @theme_dim_text;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+window.nyx-control-center button.cc-icon-button:hover {
+  background: alpha(@theme_text, 0.07);
+  color: @theme_text;
+}
+
+window.nyx-control-center button.cc-icon-button.on {
+  color: @theme_accent;
+}
+
+/* ---------- Tiles ---------- */
+
+/* One grid row is 48 px: a 1×1 toggle is just its icon, a 2×1 tile a slim bar. */
+window.nyx-control-center .cc-tile {
+  background: @theme_card;
+  border-radius: 11px;
+  min-height: 48px;
+  transition: background 120ms ease-out;
+}
+
+window.nyx-control-center .cc-toggle {
+  padding: 0 8px;
+}
+
+window.nyx-control-center .cc-sliders {
+  padding: 4px 6px;
+}
+
+window.nyx-control-center .cc-media {
+  padding: 12px 14px;
+}
+
+window.nyx-control-center .cc-power {
+  padding: 5px;
+}
+
+window.nyx-control-center .cc-clickable:hover {
+  background: alpha(@theme_text, 0.04);
+}
+
+window.nyx-control-center .cc-tile.cc-clickable:hover {
+  background: mix(@theme_card, @theme_text, 0.04);
+}
+
+window.nyx-control-center .cc-chip {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.1);
+  color: @theme_text;
+}
+
+window.nyx-control-center .cc-chip.on {
+  background: @theme_accent;
+  color: @theme_on_accent;
+}
+
+window.nyx-control-center .cc-title {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+window.nyx-control-center .cc-status {
+  font-size: 11.5px;
+  color: @theme_dim_text;
+}
+
+/* Split tiles: the main part toggles, the arrow opens details. */
+window.nyx-control-center .cc-split {
+  padding: 0;
+}
+
+window.nyx-control-center .cc-split.on {
+  background: mix(@theme_card, @theme_accent, 0.12);
+}
+
+window.nyx-control-center .cc-split-main {
+  padding: 0 0 0 9px;
+  border-radius: 11px 0 0 11px;
+}
+
+window.nyx-control-center button.cc-split-more {
+  min-width: 28px;
+  padding: 0;
+  border-radius: 0 11px 11px 0;
+  border: none;
+  border-left: 1px solid @theme_divider;
+  background: none;
+  box-shadow: none;
+  color: @theme_dim_text;
+}
+
+window.nyx-control-center .cc-split.on button.cc-split-more {
+  border-left-color: alpha(@theme_accent, 0.22);
+}
+
+window.nyx-control-center button.cc-split-more:hover {
+  background: alpha(@theme_text, 0.05);
+  color: @theme_text;
+}
+
+/* Sliders. */
+window.nyx-control-center .cc-sliders {
+  padding: 8px 8px 8px 6px;
+}
+
+window.nyx-control-center .cc-slider {
+  min-height: 30px;
+}
+
+window.nyx-control-center .cc-slider scale {
+  padding: 0 4px;
+}
+
+window.nyx-control-center scale trough {
+  min-height: 6px;
+  border-radius: 3px;
+  background: alpha(@theme_text, 0.1);
+}
+
+window.nyx-control-center scale highlight {
+  border-radius: 3px;
+  background: @theme_accent;
+}
+
+window.nyx-control-center scale slider {
+  min-width: 14px;
+  min-height: 14px;
+  margin: -5px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 4px alpha(black, 0.4);
+}
+
+window.nyx-control-center .cc-value {
+  font-size: 12px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+/* Media. */
+window.nyx-control-center .cc-art {
+  border-radius: 7px;
+}
+
+window.nyx-control-center .cc-media-buttons {
+  margin-left: -6px;
+  margin-top: 2px;
+}
+
+window.nyx-control-center .cc-media-buttons button.cc-icon-button {
+  min-width: 26px;
+  min-height: 26px;
+}
+
+/* Power mode: a segmented control. */
+window.nyx-control-center .cc-segmented {
+  padding: 2px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.035);
+}
+
+window.nyx-control-center .cc-segmented button {
+  min-height: 26px;
+  padding: 0;
+  border-radius: 5px;
+  background: none;
+  box-shadow: none;
+  color: @theme_dim_text;
+}
+
+window.nyx-control-center .cc-segmented button:checked {
+  background: @theme_raised;
+  color: @theme_text;
+  box-shadow: 0 1px 3px alpha(black, 0.3);
+}
+
+/* ---------- Pages ---------- */
+
+window.nyx-control-center .cc-dots {
+  margin-top: 12px;
+}
+
+window.nyx-control-center .cc-dots button.cc-dot {
+  min-width: 6px;
+  min-height: 6px;
+  padding: 0;
+  border-radius: 3px;
+  background: alpha(@theme_text, 0.1);
+  box-shadow: none;
+  transition: min-width 200ms ease-out, background 200ms ease-out;
+}
+
+window.nyx-control-center button.cc-dot.on {
+  min-width: 16px;
+  background: @theme_dim_text;
+}
+
+/* ---------- Detail views ---------- */
+
+window.nyx-control-center .cc-detail-head {
+  min-height: 40px;
+  margin-bottom: 10px;
+}
+
+window.nyx-control-center .cc-detail-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+window.nyx-control-center .cc-group {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: @theme_text_tertiary;
+  padding: 14px 8px 4px;
+}
+
+window.nyx-control-center .cc-card {
+  background: @theme_card;
+  border-radius: 11px;
+  padding: 6px;
+}
+
+window.nyx-control-center .cc-row {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 7px;
+}
+
+window.nyx-control-center .cc-row.selected {
+  background: alpha(@theme_accent, 0.16);
+}
+
+window.nyx-control-center .cc-row.selected > image:first-child {
+  color: @theme_accent;
+}
+
+window.nyx-control-center .cc-row-title {
+  font-size: 13px;
+}
+
+window.nyx-control-center .cc-row.selected .cc-row-title {
+  font-weight: 500;
+}
+
+window.nyx-control-center .cc-row-sub {
+  font-size: 12px;
+  color: @theme_dim_text;
+}
+
+window.nyx-control-center .cc-option {
+  padding: 8px;
+}
+
+window.nyx-control-center .cc-dim {
+  color: @theme_text_tertiary;
+}
+
+window.nyx-control-center .cc-password {
+  padding: 4px 8px 8px 34px;
+}
+
+window.nyx-control-center .cc-empty {
+  color: @theme_dim_text;
+  padding: 40px 0;
+}
+
+window.nyx-control-center .cc-detail-foot {
+  padding-top: 6px;
+}
+
+window.nyx-control-center switch {
+  min-width: 36px;
+  min-height: 20px;
+  border-radius: 999px;
+}
+
+window.nyx-control-center switch:checked {
+  background: @theme_accent;
+}
+
+/* ---------- Popovers ---------- */
+
+popover.cc-popover > contents {
+  background: @theme_popover;
+  border: 1px solid @theme_border;
+  border-radius: 15px;
+  padding: 6px;
+  min-width: 300px;
+  box-shadow: 0 16px 40px alpha(black, 0.5);
+}
+
+popover.cc-popover > arrow {
+  background: @theme_popover;
+  border: 1px solid @theme_border;
+}
+
+window.nyx-control-center .cc-app-volume {
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+/* Tooltips: light text weight, a quieter colour. */
+tooltip {
+  border-radius: 7px;
+}
+
+tooltip label {
+  font-weight: 400;
+  font-size: 12px;
+  color: @theme_dim_text;
+}
+
+/* ---------- Edit mode ---------- */
+
+window.nyx-control-center .cc-edit-cell > .cc-tile {
+  outline: 1px dashed alpha(@theme_text, 0.25);
+  outline-offset: -1px;
+}
+
+window.nyx-control-center button.cc-edit-remove,
+window.nyx-control-center button.cc-edit-resize {
+  min-width: 22px;
+  min-height: 22px;
+  margin: -6px;
+  border-radius: 999px;
+  background: @theme_raised;
+  color: @theme_text;
+  border: 1px solid @theme_border;
+  box-shadow: 0 1px 3px alpha(black, 0.3);
+}
+
+window.nyx-control-center button.cc-edit-resize {
+  margin: 4px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: @theme_text_tertiary;
+}
+
+window.nyx-control-center button.cc-edit-remove:hover {
+  color: @theme_danger;
+}
+
+window.nyx-control-center button.cc-icon-button.primary {
+  background: @theme_accent;
+  color: @theme_on_accent;
+}
+
+window.nyx-control-center button.cc-icon-button.armed {
+  color: @theme_danger;
+}
+
+window.nyx-control-center .cc-tray-area {
+  margin-top: 12px;
+  padding-top: 4px;
+  border-top: 1px solid @theme_divider;
+}
+
+window.nyx-control-center .cc-tray-card {
+  background: @theme_card;
+  border-radius: 11px;
+  padding: 10px;
+}
+
+window.nyx-control-center button.cc-tray-add {
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 999px;
+  background: @theme_accent;
+  color: @theme_on_accent;
+}
+
+window.nyx-control-center button.cc-dot-add {
+  min-width: 18px;
+  min-height: 18px;
+}
+
+window.nyx-control-center .cc-empty-page {
+  min-height: 48px;
+  border: 1px dashed alpha(@theme_accent, 0.5);
+  border-radius: 11px;
+}
+
+/* ---------- Home ---------- */
+
+window.nyx-control-center .cc-home {
+  padding: 8px 10px 10px;
+}
+
+window.nyx-control-center .cc-home-head {
+  margin-bottom: 6px;
+}
+
+window.nyx-control-center .cc-home-icon {
+  color: @theme_success;
+}
+
+window.nyx-control-center menubutton.cc-room > button {
+  min-height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: none;
+  box-shadow: none;
+  font-weight: 500;
+}
+
+window.nyx-control-center .cc-device {
+  min-height: 50px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.035);
+}
+
+window.nyx-control-center .cc-device image {
+  color: @theme_dim_text;
+}
+
+window.nyx-control-center .cc-device.on.cc-tint-warm {
+  background: mix(@theme_card, @theme_warning, 0.2);
+}
+
+window.nyx-control-center .cc-device.on.cc-tint-warm image {
+  color: @theme_warning;
+}
+
+window.nyx-control-center .cc-device-name {
+  font-size: 11.5px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+window.nyx-control-center .cc-device-status {
+  font-size: 10.5px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center .cc-scenes {
+  margin-top: 6px;
+}
+
+window.nyx-control-center button.cc-scene {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.035);
+  box-shadow: none;
+  color: @theme_dim_text;
+  font-size: 11.5px;
+}
+
+window.nyx-control-center button.cc-scene:hover {
+  background: alpha(@theme_success, 0.18);
+  color: @theme_success;
+}
+
+window.nyx-control-center button.cc-swatch {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid @theme_border;
+}
+
+.cc-light-popover {
+  padding: 6px;
+  min-width: 240px;
+}
+
+/* ---------- Colours: each kind of tile has its own (the theme's swatches) ---------- */
+
+window.nyx-control-center .tint-blue .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-blue {
+  background: @cc_blue;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-blue {
+  background: mix(@theme_card, @cc_blue, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-blue button.cc-split-more {
+  border-left-color: alpha(@cc_blue, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-blue scale highlight {
+  background: @cc_blue;
+}
+
+window.nyx-control-center .cc-slider.tint-blue > button.cc-icon-button:first-child {
+  color: @cc_blue;
+}
+
+window.nyx-control-center .cc-segmented button.tint-blue:checked {
+  color: @cc_blue;
+}
+
+window.nyx-control-center .tint-violet .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-violet {
+  background: @cc_violet;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-violet {
+  background: mix(@theme_card, @cc_violet, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-violet button.cc-split-more {
+  border-left-color: alpha(@cc_violet, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-violet scale highlight {
+  background: @cc_violet;
+}
+
+window.nyx-control-center .cc-slider.tint-violet > button.cc-icon-button:first-child {
+  color: @cc_violet;
+}
+
+window.nyx-control-center .cc-segmented button.tint-violet:checked {
+  color: @cc_violet;
+}
+
+window.nyx-control-center .tint-pink .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-pink {
+  background: @cc_pink;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-pink {
+  background: mix(@theme_card, @cc_pink, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-pink button.cc-split-more {
+  border-left-color: alpha(@cc_pink, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-pink scale highlight {
+  background: @cc_pink;
+}
+
+window.nyx-control-center .cc-slider.tint-pink > button.cc-icon-button:first-child {
+  color: @cc_pink;
+}
+
+window.nyx-control-center .cc-segmented button.tint-pink:checked {
+  color: @cc_pink;
+}
+
+window.nyx-control-center .tint-red .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-red {
+  background: @cc_red;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-red {
+  background: mix(@theme_card, @cc_red, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-red button.cc-split-more {
+  border-left-color: alpha(@cc_red, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-red scale highlight {
+  background: @cc_red;
+}
+
+window.nyx-control-center .cc-slider.tint-red > button.cc-icon-button:first-child {
+  color: @cc_red;
+}
+
+window.nyx-control-center .cc-segmented button.tint-red:checked {
+  color: @cc_red;
+}
+
+window.nyx-control-center .tint-coral .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-coral {
+  background: @cc_coral;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-coral {
+  background: mix(@theme_card, @cc_coral, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-coral button.cc-split-more {
+  border-left-color: alpha(@cc_coral, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-coral scale highlight {
+  background: @cc_coral;
+}
+
+window.nyx-control-center .cc-slider.tint-coral > button.cc-icon-button:first-child {
+  color: @cc_coral;
+}
+
+window.nyx-control-center .cc-segmented button.tint-coral:checked {
+  color: @cc_coral;
+}
+
+window.nyx-control-center .tint-amber .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-amber {
+  background: @cc_amber;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-amber {
+  background: mix(@theme_card, @cc_amber, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-amber button.cc-split-more {
+  border-left-color: alpha(@cc_amber, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-amber scale highlight {
+  background: @cc_amber;
+}
+
+window.nyx-control-center .cc-slider.tint-amber > button.cc-icon-button:first-child {
+  color: @cc_amber;
+}
+
+window.nyx-control-center .cc-segmented button.tint-amber:checked {
+  color: @cc_amber;
+}
+
+window.nyx-control-center .tint-green .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-green {
+  background: @cc_green;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-green {
+  background: mix(@theme_card, @cc_green, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-green button.cc-split-more {
+  border-left-color: alpha(@cc_green, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-green scale highlight {
+  background: @cc_green;
+}
+
+window.nyx-control-center .cc-slider.tint-green > button.cc-icon-button:first-child {
+  color: @cc_green;
+}
+
+window.nyx-control-center .cc-segmented button.tint-green:checked {
+  color: @cc_green;
+}
+
+window.nyx-control-center .tint-teal .cc-chip.on,
+window.nyx-control-center .cc-chip.on.tint-teal {
+  background: @cc_teal;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-split.on.tint-teal {
+  background: mix(@theme_card, @cc_teal, 0.13);
+}
+
+window.nyx-control-center .cc-split.on.tint-teal button.cc-split-more {
+  border-left-color: alpha(@cc_teal, 0.25);
+}
+
+window.nyx-control-center .cc-slider.tint-teal scale highlight {
+  background: @cc_teal;
+}
+
+window.nyx-control-center .cc-slider.tint-teal > button.cc-icon-button:first-child {
+  color: @cc_teal;
+}
+
+window.nyx-control-center .cc-segmented button.tint-teal:checked {
+  color: @cc_teal;
+}
+
+/* Media: the cover, what it is with progress, big controls on the right. */
+window.nyx-control-center .cc-media .cc-art {
+  border-radius: 9px;
+}
+
+window.nyx-control-center .cc-media-title {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+window.nyx-control-center .cc-media-artist {
+  font-size: 12px;
+  color: @theme_dim_text;
+}
+
+window.nyx-control-center .cc-media-progress {
+  margin-top: 6px;
+}
+
+window.nyx-control-center .cc-media-progress scale trough {
+  min-height: 4px;
+}
+
+window.nyx-control-center .cc-media-progress scale highlight {
+  background: @cc_pink;
+}
+
+window.nyx-control-center .cc-media-progress scale slider {
+  min-width: 10px;
+  min-height: 10px;
+  margin: -4px;
+}
+
+window.nyx-control-center .cc-media-time {
+  font-size: 10.5px;
+  color: @theme_text_tertiary;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center .cc-media .cc-media-buttons button.cc-icon-button {
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 999px;
+}
+
+window.nyx-control-center .cc-media .cc-media-buttons button.cc-icon-button image {
+  -gtk-icon-size: 18px;
+}
+
+window.nyx-control-center .cc-media button.cc-play {
+  min-width: 46px;
+  min-height: 46px;
+  background: @cc_pink;
+  color: @theme_bg;
+}
+
+window.nyx-control-center .cc-media button.cc-play image {
+  -gtk-icon-size: 22px;
+}
+
+window.nyx-control-center .cc-media button.cc-play:hover {
+  background: mix(@cc_pink, @theme_text, 0.15);
+  color: @theme_bg;
+}
+
+/* Power mode: the three icons fill the tile. */
+window.nyx-control-center .cc-power .cc-segmented button {
+  min-height: 36px;
+}
+
+window.nyx-control-center .cc-battery-pct {
+  font-size: 12.5px;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center .cc-battery.tint-red {
+  color: @cc_red;
+}
+
+window.nyx-control-center .cc-battery.tint-green image {
+  color: @cc_green;
+}
+
+/* Small icon buttons at the end of detail rows. */
+window.nyx-control-center button.cc-row-button {
+  min-width: 26px;
+  min-height: 26px;
+}
+
+window.nyx-control-center .cc-row.cc-dim {
+  opacity: 0.55;
+}
+
+window.nyx-control-center .cc-recording {
+  color: @cc_red;
+  padding: 4px 8px 2px;
+}
+
+/* Connection details: two columns of small facts. */
+window.nyx-control-center .cc-facts {
+  padding: 8px 10px;
+}
+
+window.nyx-control-center .cc-fact-name {
+  font-size: 11px;
+  color: @theme_text_tertiary;
+}
+
+window.nyx-control-center .cc-fact-value {
+  font-size: 12.5px;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center .cc-slider-caption {
+  padding: 4px 8px 0;
+}
+
+window.nyx-control-center .cc-scale-choice button {
+  min-height: 28px;
+  font-size: 12px;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center .cc-note {
+  padding: 6px 8px 0;
+}
+
+window.nyx-control-center .cc-indent {
+  padding-left: 26px;
+}
+
+window.nyx-control-center entry.cc-search,
+window.nyx-control-center searchentry.cc-search {
+  margin: 0 0 8px;
+  min-height: 32px;
+  border-radius: 7px;
+}
+
+window.nyx-control-center .cc-small-choice button {
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 11.5px;
+}
+
+/* Up next. */
+window.nyx-control-center .cc-upcoming {
+  padding: 9px 12px;
+}
+
+window.nyx-control-center .cc-upcoming-head {
+  margin-bottom: 4px;
+}
+
+window.nyx-control-center .cc-upcoming-head image {
+  color: @cc_red;
+}
+
+window.nyx-control-center .cc-event {
+  border-radius: 7px;
+  padding: 5px 9px;
+  background: alpha(@theme_text, 0.06);
+}
+
+window.nyx-control-center .cc-event-title {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+window.nyx-control-center .cc-event-when {
+  font-size: 11.5px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+window.nyx-control-center .cc-value.loud {
+  color: @cc_amber;
+}
+
+/* Keyboard light: a pip per level. */
+window.nyx-control-center .cc-pips {
+  margin-right: 2px;
+}
+
+window.nyx-control-center .cc-pip {
+  min-width: 7px;
+  min-height: 3px;
+  border-radius: 2px;
+  background: alpha(@theme_text, 0.18);
+}
+
+window.nyx-control-center .cc-pip.lit {
+  background: @cc_teal;
+}
+
+window.nyx-control-center .cc-art-box {
+  border-radius: 9px;
+}
+
+window.nyx-control-center .cc-art-box.empty {
+  background: alpha(@theme_text, 0.06);
+  color: @theme_text_tertiary;
+}
+
+window.nyx-control-center entry.cc-search-inline,
+window.nyx-control-center searchentry.cc-search-inline {
+  margin: 4px 6px 6px;
+}
+
+/* VPN favourites: a gold star, the default's radio in the accent. */
+window.nyx-control-center button.cc-star.on {
+  color: @cc_amber;
+}
+
+window.nyx-control-center button.cc-default-mark.on {
+  color: @cc_green;
+}
+
+/* ---------- Plugin tiles ---------- */
+
+/* A plugin's own view: the tile's frame and colours, with room inside. */
+window.nyx-control-center .cc-plugin-view {
+  padding: 8px 10px;
+}
+
+window.nyx-control-center .cc-plugin-view label {
+  font-feature-settings: "tnum";
+}
+
+/* A placed plugin tile whose plugin isn't available (edit mode only). */
+window.nyx-control-center .cc-placeholder {
+  background: none;
+  border: 1px dashed alpha(@theme_text, 0.18);
+}
+
+window.nyx-control-center .cc-plugin-detail {
+  margin-top: 6px;
+}
+
+window.nyx-control-center .cc-plugin-detail .plugin-row {
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+
+window.nyx-control-center .cc-plugin-detail .plugin-row:hover {
+  background: alpha(@theme_text, 0.05);
+}
+
+window.nyx-control-center .monospace {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+}

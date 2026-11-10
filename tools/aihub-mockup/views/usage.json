@@ -1,0 +1,648 @@
+{
+ "node": "box",
+ "orientation": "vertical",
+ "spacing": 8,
+ "align": "fill",
+ "children": [
+  {
+   "node": "box",
+   "orientation": "horizontal",
+   "spacing": 8,
+   "align": "center",
+   "children": [
+    {
+     "node": "label",
+     "text": "<b>Today</b>  186 prompts · 2.4 M tokens · 7 agents",
+     "markup": true,
+     "expand": true
+    },
+    {
+     "node": "button",
+     "icon": "view-refresh-symbolic",
+     "action": "refresh",
+     "tooltip": "Refresh"
+    }
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/claude.svg",
+       "title": "Claude Code",
+       "subtitle": "Max · Opus 5.5 · 38 prompts · 1.1 M tokens today",
+       "action": "agent:claude",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "working",
+       "class": [
+        "chip",
+        "ok"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "5 hours",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.96,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "96% left · 7:40 PM",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      2,
+      36
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Week",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.52,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "52% left · Fri",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      10,
+      36
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/codex.svg",
+       "title": "Codex",
+       "subtitle": "Pro · GPT-5.5 · 61 prompts · 840 k tokens today",
+       "action": "agent:codex",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "working",
+       "class": [
+        "chip",
+        "ok"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "5 hours",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.88,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "88% left · 4:55 AM",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      2,
+      36
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Week",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.37,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "37% left · Thu",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      10,
+      36
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/opencode.svg",
+       "title": "OpenCode",
+       "subtitle": "No quota · Qwen3-8B (local) · 18 prompts today",
+       "action": "agent:opencode",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "3 min ago",
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/grok.svg",
+       "title": "xAI: Grok and Cursor",
+       "subtitle": "SuperGrok · shared quota · 52 prompts today",
+       "action": "agent:grok",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "6 min ago",
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Month",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.73,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "73% left · Dec 1",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      2,
+      36
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Cursor API",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.12,
+       "expand": true,
+       "class": [
+        "meter",
+        "warn"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "12% left · Dec 1",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      10,
+      36
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/hermes.svg",
+       "title": "Hermes",
+       "subtitle": "No quota · 4 prompts today",
+       "action": "agent:hermes",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "1 h ago",
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/antigravity.svg",
+       "title": "Antigravity",
+       "subtitle": "Pro · Gemini 3 · 9 prompts today",
+       "action": "agent:antigravity",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "2 h ago",
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "children": [
+      {
+       "node": "label",
+       "text": "Week",
+       "width": 76,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.64,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "64% left · Mon",
+       "width": 118,
+       "class": [
+        "dim"
+       ]
+      }
+     ],
+     "margin": [
+      0,
+      12,
+      10,
+      36
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/muse.svg",
+       "title": "Muse",
+       "subtitle": "No quota · 4 prompts today",
+       "action": "agent:muse",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "5 h ago",
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "spacing": 4,
+   "align": "fill",
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 6,
+     "align": "center",
+     "children": [
+      {
+       "node": "row",
+       "icon": "/plugin/icons/omp.svg",
+       "title": "oh-my-pi",
+       "subtitle": "No quota · no prompts today",
+       "action": "agent:omp",
+       "expand": true
+      },
+      {
+       "node": "label",
+       "text": "Sun",
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "icon",
+       "name": "go-next-symbolic",
+       "size": 16,
+       "class": [
+        "dim",
+        "trail"
+       ]
+      }
+     ]
+    }
+   ],
+   "class": [
+    "card"
+   ]
+  },
+  {
+   "node": "label",
+   "text": "Last used first · quotas for the providers you turned on · updated 1 min ago",
+   "class": [
+    "foot"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+/* Only for the mockup's stand-in desktop; the bar's own sheet does the rest. */
+window.mock-desktop { background-color: mix(@theme_bg, @theme_accent, 0.06); border-bottom: none; }
+.mock-bar { background-color: @theme_panel; border-bottom: 1px solid @hairline; }
+/* popover.nyx-bar-popover > contents, drawn in the window: X11 without a compositor
+   gives real popovers a black frame. */
+.mock-popover {
+  background-color: @theme_popover;
+  border-radius: 15px;
+  padding: 12px;
+  box-shadow: 0 6px 24px alpha(@theme_shadow, 0.35);
+}
+.mock-popover .plugin-row { padding: 6px 8px; border-radius: 7px; }
+.mock-popover .plugin-row:hover { background-color: @row_hover; }

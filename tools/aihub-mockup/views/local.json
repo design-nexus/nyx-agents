@@ -1,0 +1,462 @@
+{
+ "node": "box",
+ "orientation": "vertical",
+ "align": "fill",
+ "spacing": 8,
+ "children": [
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "align": "fill",
+   "spacing": 4,
+   "class": [
+    "card"
+   ],
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "margin": [
+      8,
+      10,
+      4,
+      10
+     ],
+     "children": [
+      {
+       "node": "vector",
+       "width": 22,
+       "height": 22,
+       "view_box": [
+        0,
+        0,
+        24,
+        24
+       ],
+       "commands": [
+        {
+         "op": "rect",
+         "x": 5,
+         "y": 5,
+         "w": 14,
+         "h": 14,
+         "radius": 3,
+         "stroke": "text",
+         "width": 1.6
+        },
+        {
+         "op": "rect",
+         "x": 9,
+         "y": 9,
+         "w": 6,
+         "h": 6,
+         "radius": 1.5,
+         "fill": "accent"
+        },
+        {
+         "op": "line",
+         "x1": 9,
+         "y1": 1.5,
+         "x2": 9,
+         "y2": 5,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 12,
+         "y1": 1.5,
+         "x2": 12,
+         "y2": 5,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 15,
+         "y1": 1.5,
+         "x2": 15,
+         "y2": 5,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 9,
+         "y1": 19,
+         "x2": 9,
+         "y2": 22.5,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 12,
+         "y1": 19,
+         "x2": 12,
+         "y2": 22.5,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 15,
+         "y1": 19,
+         "x2": 15,
+         "y2": 22.5,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 1.5,
+         "y1": 9,
+         "x2": 5,
+         "y2": 9,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 1.5,
+         "y1": 12,
+         "x2": 5,
+         "y2": 12,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 1.5,
+         "y1": 15,
+         "x2": 5,
+         "y2": 15,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 19,
+         "y1": 9,
+         "x2": 22.5,
+         "y2": 9,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 19,
+         "y1": 12,
+         "x2": 22.5,
+         "y2": 12,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        },
+        {
+         "op": "line",
+         "x1": 19,
+         "y1": 15,
+         "x2": 22.5,
+         "y2": 15,
+         "stroke": "dim_text",
+         "width": 1.4,
+         "round": true
+        }
+       ]
+      },
+      {
+       "node": "box",
+       "orientation": "vertical",
+       "align": "fill",
+       "expand": true,
+       "children": [
+        {
+         "node": "label",
+         "text": "<b>Nyx AI Core</b>",
+         "markup": true
+        },
+        {
+         "node": "label",
+         "text": "llama.cpp \u00b7 Vulkan \u00b7 1 request running",
+         "class": [
+          "dim"
+         ]
+        }
+       ]
+      },
+      {
+       "node": "label",
+       "text": "running",
+       "class": [
+        "chip",
+        "ok"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "spacing": 10,
+     "align": "center",
+     "margin": [
+      0,
+      10,
+      6,
+      40
+     ],
+     "children": [
+      {
+       "node": "label",
+       "text": "Memory",
+       "width": 56,
+       "class": [
+        "dim"
+       ]
+      },
+      {
+       "node": "progress",
+       "value": 0.46,
+       "expand": true,
+       "class": [
+        "meter"
+       ]
+      },
+      {
+       "node": "label",
+       "text": "7.4 of 16 GB",
+       "class": [
+        "dim"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "node": "label",
+   "text": "MODELS",
+   "class": [
+    "section"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "align": "fill",
+   "class": [
+    "card"
+   ],
+   "children": [
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "align": "center",
+     "children": [
+      {
+       "node": "vector",
+       "width": 8,
+       "height": 8,
+       "margin": [
+        0,
+        0,
+        0,
+        12
+       ],
+       "view_box": [
+        0,
+        0,
+        8,
+        8
+       ],
+       "commands": [
+        {
+         "op": "circle",
+         "cx": 4,
+         "cy": 4,
+         "r": 3.5,
+         "fill": "success"
+        }
+       ]
+      },
+      {
+       "node": "row",
+       "title": "Qwen3-8B-Instruct \u00b7 Q4_K_M",
+       "subtitle": "Loaded \u00b7 5.1 GB \u00b7 chat, tools \u00b7 used 20 s ago",
+       "action": "model:qwen3-8b",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "label": "Unload",
+       "action": "unload:qwen3-8b",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "align": "center",
+     "children": [
+      {
+       "node": "vector",
+       "width": 8,
+       "height": 8,
+       "margin": [
+        0,
+        0,
+        0,
+        12
+       ],
+       "view_box": [
+        0,
+        0,
+        8,
+        8
+       ],
+       "commands": [
+        {
+         "op": "circle",
+         "cx": 4,
+         "cy": 4,
+         "r": 3.5,
+         "fill": "success"
+        }
+       ]
+      },
+      {
+       "node": "row",
+       "title": "nomic-embed-text-v2 \u00b7 F16",
+       "subtitle": "Loaded \u00b7 0.3 GB \u00b7 embeddings \u00b7 Nyx Files search",
+       "action": "model:nomic",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "label": "Unload",
+       "action": "unload:nomic",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    },
+    {
+     "node": "box",
+     "orientation": "horizontal",
+     "align": "center",
+     "children": [
+      {
+       "node": "vector",
+       "width": 8,
+       "height": 8,
+       "margin": [
+        0,
+        0,
+        0,
+        12
+       ],
+       "view_box": [
+        0,
+        0,
+        8,
+        8
+       ],
+       "commands": [
+        {
+         "op": "circle",
+         "cx": 4,
+         "cy": 4,
+         "r": 3.5,
+         "fill": "muted"
+        }
+       ]
+      },
+      {
+       "node": "row",
+       "title": "Gemma-3-12B \u00b7 Q4_K_M",
+       "subtitle": "On disk \u00b7 7.3 GB \u00b7 update available",
+       "action": "model:gemma",
+       "expand": true
+      },
+      {
+       "node": "button",
+       "label": "Load",
+       "action": "load:gemma",
+       "class": [
+        "trail"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "node": "label",
+   "text": "CODING TOOLS",
+   "class": [
+    "section"
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "vertical",
+   "align": "fill",
+   "class": [
+    "card"
+   ],
+   "children": [
+    {
+     "node": "row",
+     "icon": "network-server-symbolic",
+     "title": "OpenAI-compatible API",
+     "subtitle": "127.0.0.1:8080/v1 \u00b7 loopback only \u00b7 2 requests today",
+     "action": "copy-endpoint"
+    },
+    {
+     "node": "row",
+     "icon": "/plugin/icons/opencode.svg",
+     "title": "OpenCode uses Qwen3-8B",
+     "subtitle": "Last session 3 min ago",
+     "action": "open:51e8"
+    }
+   ]
+  },
+  {
+   "node": "box",
+   "orientation": "horizontal",
+   "spacing": 6,
+   "children": [
+    {
+     "node": "label",
+     "text": "Models update on mains power while idle",
+     "class": [
+      "foot"
+     ],
+     "expand": true
+    },
+    {
+     "node": "button",
+     "label": "Models\u2026",
+     "action": "open-ai-core"
+    }
+   ]
+  }
+ ]
+}
