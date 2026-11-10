@@ -58,12 +58,20 @@ pub fn watch_dirs(harness: &str, cwd: &str, since: u64) -> Vec<PathBuf> {
             let d = omp_dir(cwd);
             vec![d.parent().map(Path::to_path_buf).unwrap_or_default(), d]
         }
-        _ => Vec::new(),
+        // SQLite writes land in the database's folder (the file and its -wal).
+        h => crate::sqlite_sessions::db_path(h).and_then(|p| p.parent().map(Path::to_path_buf)).into_iter().collect(),
     }
 }
 
 /// The session id `harness` started in `cwd` after `since`, skipping `taken`.
-pub fn find(harness: &str, cwd: &str, since: u64, taken: &[String]) -> Option<String> {
+/// `before` holds the ids a SQLite harness had in `cwd` before the launch.
+pub fn find(
+    harness: &str,
+    cwd: &str,
+    since: u64,
+    taken: &[String],
+    before: &std::collections::HashSet<String>,
+) -> Option<String> {
     let fresh = |t: u64| t + 2_000 >= since;
     match harness {
         "codex" => crate::codex::find_session(cwd, since, taken),
@@ -98,6 +106,7 @@ pub fn find(harness: &str, cwd: &str, since: u64, taken: &[String]) -> Option<St
             found.sort();
             found.into_iter().next().map(|(_, id)| id)
         }
+        h if crate::sqlite_sessions::HARNESSES.contains(&h) => crate::sqlite_sessions::find_new(h, cwd, before, taken),
         _ => None,
     }
 }
@@ -115,6 +124,7 @@ pub fn resumable(harness: &str, cwd: &str, id: &str, since: u64) -> bool {
         "omp" => std::fs::read_dir(omp_dir(cwd))
             .map(|it| it.flatten().any(|e| e.file_name().to_string_lossy().ends_with(&format!("_{id}.jsonl"))))
             .unwrap_or(false),
+        h if crate::sqlite_sessions::HARNESSES.contains(&h) => crate::sqlite_sessions::exists(h, cwd, id),
         _ => false,
     }
 }

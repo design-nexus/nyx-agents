@@ -109,9 +109,9 @@ const BUILTINS: &[Builtin] = &[
         mise: &["opencode"],
         auth_files: &[".local/share/opencode/auth.json"],
         auth_env: &[],
-        tier: Tier::Terminal,
+        tier: Tier::Native,
     },
-    Builtin { id: "hermes", name: "Hermes", exe: &["hermes"], mise: &[], auth_files: &[], auth_env: &[], tier: Tier::Terminal },
+    Builtin { id: "hermes", name: "Hermes", exe: &["hermes"], mise: &[], auth_files: &[], auth_env: &[], tier: Tier::Native },
 ];
 
 /// A command from `~/.config/nyx-agents/harnesses.toml`:
@@ -175,7 +175,11 @@ fn caps(id: &str) -> Capabilities {
             Capabilities { resume: true, subagents: Some(nyx_agents_proto::SubagentSource::Transcript), ..Default::default() }
         }
         // Seen reporting OSC 7501 status when launched (2026-11-10).
-        "antigravity" | "crush" | "opencode" => Capabilities { program_status: true, ..Default::default() },
+        "crush" => Capabilities { program_status: true, ..Default::default() },
+        // Verified flags: `agy --conversation <id>`, `opencode -s <id>`; ids read from their SQLite records.
+        "antigravity" | "opencode" => Capabilities { program_status: true, resume: true, ..Default::default() },
+        // Verified flags: `muse resume <UUID>`, `hermes -r <id>`.
+        "muse" | "hermes" => Capabilities { resume: true, ..Default::default() },
         // Verified: `omp -r <id>`; the id is read from oh-my-pi's session file.
         "omp" => Capabilities { program_status: true, resume: true, ..Default::default() },
         // Verified: `cursor-agent --resume <chatId>`; the id is read from the chat's meta.json.
@@ -268,7 +272,12 @@ pub fn resume(h: &Harness, s: &Session) -> Result<Plan, String> {
         }
         ("codex", Some(id)) => Ok(Plan { argv: vec![exe, "resume".into(), id.into()], harness_session: Some(id.into()) }),
         ("cursor", Some(id)) => Ok(Plan { argv: vec![exe, "--resume".into(), id.into()], harness_session: Some(id.into()) }),
-        ("omp", Some(id)) => Ok(Plan { argv: vec![exe, "-r".into(), id.into()], harness_session: Some(id.into()) }),
+        ("omp" | "hermes", Some(id)) => Ok(Plan { argv: vec![exe, "-r".into(), id.into()], harness_session: Some(id.into()) }),
+        ("opencode", Some(id)) => Ok(Plan { argv: vec![exe, "-s".into(), id.into()], harness_session: Some(id.into()) }),
+        ("muse", Some(id)) => Ok(Plan { argv: vec![exe, "resume".into(), id.into()], harness_session: Some(id.into()) }),
+        ("antigravity", Some(id)) => {
+            Ok(Plan { argv: vec![exe, "--conversation".into(), id.into()], harness_session: Some(id.into()) })
+        }
         _ => Err(format!("{} sessions cannot be resumed yet", h.name)),
     }
 }

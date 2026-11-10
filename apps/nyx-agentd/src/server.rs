@@ -24,6 +24,8 @@ pub struct Daemon {
     sessions: Mutex<HashMap<String, Session>>,
     /// The session on screen in the app, if its window is focused.
     viewing: Mutex<Option<String>>,
+    /// For SQLite harnesses: the session ids already in a launch's folder.
+    before: Mutex<HashMap<String, std::collections::HashSet<String>>>,
     /// Sessions the user asked to stop (their exit is not news).
     stopping: Mutex<Vec<String>>,
     notifier: Mutex<Option<Arc<crate::notify::Notifier>>>,
@@ -117,7 +119,9 @@ impl Daemon {
         // Each harness only has something to resume once a conversation began.
         match s.harness.as_str() {
             "claude" => adapters::claude_transcript(&s.cwd, hs).exists(),
-            "codex" | "cursor" | "omp" => nyx_agents_core::sessions::resumable(&s.harness, &s.cwd, hs, s.created),
+            "codex" | "cursor" | "omp" | "opencode" | "hermes" | "muse" | "antigravity" => {
+                nyx_agents_core::sessions::resumable(&s.harness, &s.cwd, hs, s.created)
+            }
             "grok" => std::fs::read_dir(paths::home().join(".grok/sessions"))
                 .map(|it| it.flatten().any(|e| e.path().join(hs).is_dir()))
                 .unwrap_or(false),
@@ -143,6 +147,7 @@ pub fn run() -> i32 {
     let d = Arc::new(Daemon {
         sessions: Mutex::new(HashMap::new()),
         viewing: Mutex::new(None),
+        before: Mutex::new(HashMap::new()),
         stopping: Mutex::new(Vec::new()),
         notifier: Mutex::new(None),
         subscribers: Mutex::new(Vec::new()),
@@ -383,6 +388,10 @@ fn launch(d: &Arc<Daemon>, l: Launch) -> Result<Session, RpcError> {
     };
     d.sessions.lock().unwrap().insert(s.id.clone(), s.clone());
     d.changed(&s);
+    if nyx_agents_core::sqlite_sessions::HARNESSES.contains(&s.harness.as_str()) {
+        let before = nyx_agents_core::sqlite_sessions::snapshot(&s.harness, &s.cwd);
+        d.before.lock().unwrap().insert(s.id.clone(), before);
+    }
     start_holder(d, &s, &plan.argv)?;
     Ok(s)
 }
@@ -466,7 +475,17 @@ fn watch_records(d: Arc<Daemon>, id: String) {
         }
         if hs.is_none() {
             let taken: Vec<String> = d.sessions.lock().unwrap().values().filter_map(|s| s.harness_session.clone()).collect();
-            if let Some(found) = sessions::find(&harness, &cwd, since, &taken) {
+            let before = d.before.lock().unwrap().get(&id).cloned().unwrap_or_default();
+            // A SQLite harness's session is only recognisable against the
+            // ids it had before this launch; without that, don't guess.
+            let sqlite = nyx_agents_core::sqlite_sessions::HARNESSES.contains(&harness.as_str());
+            let found = if sqlite && !d.before.lock().unwrap().contains_key(&id) {
+                None
+            } else {
+                sessions::find(&harness, &cwd, since, &taken, &before)
+            };
+            if let Some(found) = found {
+                d.before.lock().unwrap().remove(&id);
                 d.update(&id, |s| s.harness_session = Some(found.clone()));
                 hs = Some(found);
             }
@@ -529,7 +548,9 @@ fn monitor(d: Arc<Daemon>, id: String) {
         let harness = d.sessions.lock().unwrap().get(&id).map(|s| s.harness.clone()).unwrap_or_default();
         match harness.as_str() {
             "claude" => std::thread::spawn(move || watch_subagents(d, id)),
-            "codex" | "cursor" | "omp" => std::thread::spawn(move || watch_records(d, id)),
+            "codex" | "cursor" | "omp" | "opencode" | "hermes" | "muse" | "antigravity" => {
+                std::thread::spawn(move || watch_records(d, id))
+            }
             _ => std::thread::spawn(|| {}),
         };
     }

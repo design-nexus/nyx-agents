@@ -10,6 +10,7 @@ pub mod inotify;
 pub mod paths;
 pub mod sanitize;
 pub mod sessions;
+pub mod sqlite_sessions;
 pub mod store;
 pub mod worktree;
 
