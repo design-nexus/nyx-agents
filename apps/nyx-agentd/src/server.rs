@@ -300,6 +300,16 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
             let title = sanitize::line(&title, 120);
             serde_json::to_value(d.update(&id, |s| s.title = title).ok_or_else(|| err("not-found", "no such session"))?).unwrap()
         }
+        Call::RemoveWorktree { id } => {
+            let s = get(&id)?;
+            if matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting) {
+                return Err(err("running", "stop the session first"));
+            }
+            let wt =
+                s.worktree.filter(|w| w.linked).ok_or_else(|| err("no-worktree", "this session has no worktree of its own"))?;
+            nyx_agents_core::worktree::remove(Path::new(&wt.root)).map_err(|e| err("worktree", &e))?;
+            json!({ "removed": wt.root })
+        }
         Call::ListProjects => {
             let mut seen = HashMap::new();
             for s in d.sessions.lock().unwrap().values() {
@@ -340,9 +350,13 @@ fn project_id(root: &Path) -> String {
 
 fn launch(d: &Arc<Daemon>, l: Launch) -> Result<Session, RpcError> {
     let h = d.harness(&l.harness).ok_or_else(|| err("unknown-harness", &format!("unknown harness {}", l.harness)))?;
-    let cwd = Path::new(&l.cwd).canonicalize().map_err(|_| err("bad-cwd", "working directory does not exist"))?;
+    let mut cwd = Path::new(&l.cwd).canonicalize().map_err(|_| err("bad-cwd", "working directory does not exist"))?;
     if !cwd.is_dir() {
         return Err(err("bad-cwd", "working directory is not a folder"));
+    }
+    if let Some(name) = &l.worktree {
+        let name = if name.trim().is_empty() { format!("{}-{}", h.id, &new_id()[..6]) } else { name.clone() };
+        cwd = nyx_agents_core::worktree::create(&cwd, &name).map_err(|e| err("worktree", &e))?;
     }
     let plan = adapters::launch(&h, &l.args).map_err(|e| err("not-installed", &e))?;
     let ctx = git::context(&cwd);

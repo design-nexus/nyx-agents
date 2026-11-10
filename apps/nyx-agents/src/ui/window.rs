@@ -26,6 +26,7 @@ struct Ui {
     new_button: gtk::MenuButton,
     new_list: gtk::ListBox,
     folder_button: gtk::Button,
+    worktree_check: gtk::CheckButton,
     folder: RefCell<String>,
     pages: RefCell<Vec<Rc<RefCell<Page>>>>,
     active: Cell<usize>,
@@ -140,6 +141,16 @@ fn actions() -> Rc<Actions> {
                 toast(&format!("Could not open Nyx Git: {e}"));
             }
         }),
+        remove_worktree: Rc::new(|id| {
+            let id = id.to_string();
+            daemon::request(
+                move |c| c.call::<serde_json::Value>(nyx_agents_proto::Call::RemoveWorktree { id }),
+                |r| match r {
+                    Ok(_) => toast("Worktree removed; its branch is kept"),
+                    Err(e) => toast(&e),
+                },
+            );
+        }),
         ended: Rc::new(|_| {}),
         subagent_source: Rc::new(|harness| {
             cur().and_then(|ui| ui.harnesses.borrow().iter().find(|h| h.id == harness).and_then(|h| h.capabilities.subagents))
@@ -197,7 +208,7 @@ fn build(app: &gtk::Application) {
     }
     header.start.append(&collapse);
 
-    let (new_button, new_list, folder_button) = new_session_menu();
+    let (new_button, new_list, folder_button, worktree_check) = new_session_menu();
     header.end.append(&new_button);
     {
         let nb = new_button.clone();
@@ -221,6 +232,7 @@ fn build(app: &gtk::Application) {
         }
     };
     folder_button.set_label(&nyx_core::paths::pretty(std::path::Path::new(&folder)));
+    worktree_check.set_sensitive(nyx_agents_core::git::context(std::path::Path::new(&folder)).is_some());
     let ui = Rc::new(Ui {
         window: window.clone(),
         overlay,
@@ -230,6 +242,7 @@ fn build(app: &gtk::Application) {
         new_button,
         new_list,
         folder_button,
+        worktree_check,
         folder: RefCell::new(folder),
         pages: RefCell::new(Vec::new()),
         active: Cell::new(0),
@@ -424,7 +437,10 @@ fn refresh_sidebar() {
     // Projects: folders of past sessions, for starting another there.
     let mut projects: Vec<(String, String)> = Vec::new();
     for s in &list {
-        let root = s.worktree.as_ref().map(|w| w.root.clone()).unwrap_or_else(|| s.cwd.clone());
+        // Worktree sessions belong to their main repository.
+        let root = nyx_agents_core::git::context(std::path::Path::new(&s.cwd))
+            .map(|(_, main)| main.display().to_string())
+            .unwrap_or_else(|| s.cwd.clone());
         if !projects.iter().any(|(r, _)| *r == root) {
             let name =
                 std::path::Path::new(&root).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| root.clone());
@@ -665,10 +681,15 @@ fn set_folder(path: &str) {
     let Some(ui) = cur() else { return };
     *ui.folder.borrow_mut() = path.to_string();
     ui.folder_button.set_label(&nyx_core::paths::pretty(std::path::Path::new(path)));
+    let in_repo = nyx_agents_core::git::context(std::path::Path::new(path)).is_some();
+    ui.worktree_check.set_sensitive(in_repo);
+    if !in_repo {
+        ui.worktree_check.set_active(false);
+    }
 }
 
 /// The New session menu: a folder, and the installed harnesses to start there.
-fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Button) {
+fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Button, gtk::CheckButton) {
     let list = gtk::ListBox::new();
     list.add_css_class("new-session-list");
     list.set_selection_mode(gtk::SelectionMode::None);
@@ -699,8 +720,11 @@ fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Button) {
     content.set_margin_bottom(8);
     content.set_margin_start(8);
     content.set_margin_end(8);
+    let worktree = gtk::CheckButton::with_label("In a new worktree");
+    worktree.set_tooltip_text(Some("Start on a new branch in its own git worktree, so agents can work in parallel"));
     content.append(&heading);
     content.append(&folder);
+    content.append(&worktree);
     content.append(&list);
     let popover = gtk::Popover::new();
     popover.set_child(Some(&content));
@@ -713,7 +737,7 @@ fn new_session_menu() -> (gtk::MenuButton, gtk::ListBox, gtk::Button) {
         let id = row.widget_name().to_string();
         launch(&id);
     });
-    (button, list, folder)
+    (button, list, folder, worktree)
 }
 
 fn fill_new_menu() {
@@ -760,6 +784,8 @@ fn launch(harness: &str) {
     let Some(ui) = cur() else { return };
     ui.new_button.popdown();
     let cwd = ui.folder.borrow().clone();
+    let worktree = ui.worktree_check.is_active().then(String::new);
+    ui.worktree_check.set_active(false);
     let harness = harness.to_string();
     prefs::update(|p| {
         p.last_folder = cwd.clone();
@@ -768,7 +794,7 @@ fn launch(harness: &str) {
         }
     });
     daemon::request(
-        move |c| c.launch(Launch { harness, cwd, ..Default::default() }),
+        move |c| c.launch(Launch { harness, cwd, worktree, ..Default::default() }),
         |r| match r {
             Ok(s) => {
                 let Some(ui) = cur() else { return };

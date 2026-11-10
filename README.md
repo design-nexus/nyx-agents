@@ -24,6 +24,10 @@ Status:
   Grok resume; five report their status. What each supports, and how it was
   checked, is in [docs/HARNESSES.md](docs/HARNESSES.md).
 
+Also: desktop notifications when an agent needs you or finishes (posted by
+the manager, so the app can be closed), a Nyx Settings page, and sessions in
+their own git worktree (`--worktree`, or "In a new worktree" in New session).
+
 Install: `./install.sh agents` (builds, installs to `~/.local/bin`, and
 enables `nyx-agentd.socket`, which starts the manager on first use).
 
@@ -32,6 +36,7 @@ enables `nyx-agentd.socket`, which starts the manager on first use).
 ```sh
 nyx-agents harnesses             # what is installed, versions, integration tier
 nyx-agents launch claude --cwd ~/Projects/foo
+nyx-agents launch codex --cwd ~/Projects/foo --worktree fix-parser
 nyx-agents ls
 nyx-agents attach 03c6           # Ctrl+] detaches; the agent keeps running
 nyx-agents attach 03c6 --observe # read-only

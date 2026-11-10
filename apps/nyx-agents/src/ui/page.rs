@@ -24,6 +24,7 @@ pub struct Pane {
     banner_text: gtk::Label,
     resume: gtk::Button,
     forget: gtk::Button,
+    remove_worktree: gtk::Button,
     shown_lifecycle: Option<Lifecycle>,
 }
 
@@ -59,6 +60,7 @@ pub struct Actions {
     pub split: SplitFn,
     pub unsplit: IdFn,
     pub open_git: IdFn,
+    pub remove_worktree: IdFn,
     /// A pane's session ended or its holder went away.
     pub ended: IdFn,
     /// Where a harness's subagent activity can be read, if anywhere.
@@ -99,8 +101,12 @@ impl Pane {
         resume.set_tooltip_text(Some("Continue this conversation in a new run of the agent"));
         let forget = gtk::Button::with_label("Forget");
         forget.set_tooltip_text(Some("Remove this ended session and its history"));
+        let remove_worktree = gtk::Button::with_label("Remove worktree");
+        remove_worktree
+            .set_tooltip_text(Some("Delete this session's worktree folder if it has no uncommitted changes; the branch is kept"));
         banner.append(&banner_text);
         banner.append(&resume);
+        banner.append(&remove_worktree);
         banner.append(&forget);
         banner.set_visible(false);
         root.append(&banner);
@@ -110,6 +116,9 @@ impl Pane {
         let id = s.id.clone();
         let act = a.forget.clone();
         forget.connect_clicked(move |_| act(&id));
+        let id = s.id.clone();
+        let act = a.remove_worktree.clone();
+        remove_worktree.connect_clicked(move |_| act(&id));
         let pane = Rc::new(RefCell::new(Pane {
             id: s.id.clone(),
             root,
@@ -119,6 +128,7 @@ impl Pane {
             banner_text,
             resume,
             forget,
+            remove_worktree,
             shown_lifecycle: None,
         }));
         Pane::update(&pane, s, a);
@@ -192,6 +202,12 @@ impl Pane {
             self.banner_text.set_text(&format!("{why} Showing its last screen."));
             self.resume.set_visible(s.resumable);
         }
+        let own_worktree = s.worktree.as_ref().is_some_and(|w| {
+            w.linked
+                && std::path::Path::new(&w.root).starts_with(nyx_agents_core::worktree::root())
+                && std::path::Path::new(&w.root).exists()
+        });
+        self.remove_worktree.set_visible(ended && own_worktree);
         self.forget.set_visible(ended);
     }
 }

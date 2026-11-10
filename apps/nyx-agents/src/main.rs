@@ -4,7 +4,7 @@
 //!   nyx-agents harnesses [--json] [--refresh]
 //!   nyx-agents ls [--json]
 //!   nyx-agents status ID [--json]
-//!   nyx-agents launch HARNESS [--cwd DIR] [--title T] [-- ARGS...]
+//!   nyx-agents launch HARNESS [--cwd DIR] [--title T] [--worktree [NAME]] [-- ARGS...]
 //!   nyx-agents attach ID [--observe]     Ctrl+] detaches
 //!   nyx-agents resume ID | stop ID [--force] | forget ID
 //!   nyx-agents hub [--watch]

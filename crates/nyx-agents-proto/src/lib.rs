@@ -266,6 +266,11 @@ pub enum Call {
         id: SessionId,
         title: String,
     },
+    /// Remove an ended session's worktree, if Nyx Agents made it and it is clean.
+    #[serde(rename = "worktrees.remove")]
+    RemoveWorktree {
+        id: SessionId,
+    },
     /// The session the user is looking at in the app (none when the window
     /// is not focused). It is not notified about.
     #[serde(rename = "sessions.viewing")]
@@ -291,6 +296,10 @@ pub struct Launch {
     pub title: Option<String>,
     #[serde(default)]
     pub workspace: Option<WorkspaceId>,
+    /// Start in a new git worktree of the folder's repository, on a new
+    /// branch `agents/<name>` (empty: a name is chosen).
+    #[serde(default)]
+    pub worktree: Option<String>,
     #[serde(default = "default_cols")]
     pub cols: u16,
     #[serde(default = "default_rows")]

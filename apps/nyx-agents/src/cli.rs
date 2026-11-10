@@ -112,6 +112,11 @@ pub fn run(args: &[String]) -> i32 {
                     args: rest,
                     title: opt(args, "--title").map(String::from),
                     workspace: None,
+                    // --worktree [NAME]: a new worktree, named or not.
+                    worktree: args
+                        .iter()
+                        .position(|a| a == "--worktree")
+                        .map(|i| args.get(i + 1).filter(|n| !n.starts_with("--")).cloned().unwrap_or_default()),
                     cols,
                     rows,
                 })?;

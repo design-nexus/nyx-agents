@@ -10,6 +10,7 @@ pub mod inotify;
 pub mod paths;
 pub mod sanitize;
 pub mod store;
+pub mod worktree;
 
 /// A random identifier: 128 bits from the kernel, as hex.
 pub fn new_id() -> String {
