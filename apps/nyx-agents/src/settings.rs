@@ -50,6 +50,29 @@ pub fn set_notifications(on: bool) -> std::io::Result<()> {
     set("notifications", "enabled", toml::Value::Boolean(on))
 }
 
+/// Agents whose provider reports a quota, and how it is asked.
+const QUOTAS: &[(&str, &str, &str)] = &[
+    ("claude", "Claude Code", "Asks Anthropic with Claude Code's own sign-in."),
+    ("codex", "Codex", "Asks OpenAI through codex app-server, with no model calls."),
+    ("grok", "Grok Build", "Asks xAI with Grok's sign-in, read only: it is never renewed or rewritten here."),
+    ("cursor", "Cursor", "Asks Cursor with its own sign-in."),
+    ("antigravity", "Antigravity", "Runs agy -p /usage."),
+];
+
+/// The agents listed in `[usage] quotas`.
+fn quotas(t: &toml::Table) -> Vec<String> {
+    t.get("usage").and_then(|u| u.get("quotas")).and_then(|q| q.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default()
+}
+
+fn set_quota(agent: &str, on: bool) -> std::io::Result<()> {
+    let mut list = quotas(&config());
+    list.retain(|a| a != agent);
+    if on {
+        list.push(agent.to_string());
+    }
+    set("usage", "quotas", toml::Value::Array(list.into_iter().map(toml::Value::String).collect()))
+}
+
 fn harnesses() -> (Vec<Harness>, bool) {
     match Client::connect("nyx-agents-settings").and_then(|mut c| c.harnesses(false)) {
         Ok(h) => (h, true),
@@ -89,6 +112,13 @@ fn page() -> Value {
             })
         })
         .collect();
+    let on = quotas(&cfg);
+    let quota_rows: Vec<Value> = QUOTAS
+        .iter()
+        .map(|(id, name, how)| {
+            json!({ "kind": "switch", "key": format!("quota-{id}"), "title": format!("Check {name}'s quota"), "desc": how, "value": on.iter().any(|a| a == id) })
+        })
+        .collect();
     json!({
         "subtitle": if running { "The session manager is running" } else { "The session manager starts when Agents opens" },
         "groups": [
@@ -101,6 +131,7 @@ fn page() -> Value {
                 { "kind": "choice", "key": "default_harness", "title": "Agent", "desc": "Listed first in New session.",
                   "value": get_str(&cfg, "sessions", "default_harness").unwrap_or_default(), "options": options }
             ]},
+            { "title": "Quotas", "note": "Shown in the AI Hub. Each is checked every few minutes while on; sign-ins are read by the session manager only and sent only to their provider.", "rows": quota_rows },
             { "title": "Agents on this computer", "note": "Found on your PATH and in mise's installs. Shims are never run.", "rows": rows },
             { "title": "Terminal", "rows": [
                 { "kind": "info", "key": "font", "title": "Font", "value": "The system monospace font", "desc": "Change it under Appearance; colours follow the theme." }
@@ -116,7 +147,7 @@ pub fn run(args: &[String]) -> i32 {
                 "{}",
                 json!([{ "id": "agents", "title": "Agents", "icon": "utilities-terminal-symbolic",
                          "description": "Coding agents: notifications, the default agent, what is installed",
-                         "keywords": ["claude", "codex", "agents", "ai", "notifications"] }])
+                         "keywords": ["claude", "codex", "agents", "ai", "notifications", "quota", "usage"] }])
             );
             0
         }
@@ -128,6 +159,9 @@ pub fn run(args: &[String]) -> i32 {
             let (key, value) = (args.get(2).map(String::as_str), args.get(3).cloned().unwrap_or_default());
             let r = match key {
                 Some("notifications") => set("notifications", "enabled", toml::Value::Boolean(value == "true")),
+                Some(k) if k.strip_prefix("quota-").is_some_and(|a| QUOTAS.iter().any(|(id, ..)| *id == a)) => {
+                    set_quota(&k["quota-".len()..], value == "true")
+                }
                 Some("default_harness") if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') => {
                     set("sessions", "default_harness", toml::Value::String(value))
                 }

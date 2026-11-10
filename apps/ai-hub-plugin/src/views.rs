@@ -461,7 +461,7 @@ fn usage_tab(st: &State) -> Node {
     out.push(label("Last used first").class("foot"));
     if !off.is_empty() {
         out.push(label(format!("Quota checks are off for {}.", off.join(", "))).class("foot"));
-        out.push(label("Turn them on with [usage] quotas in config.toml.").class("foot"));
+        out.push(label("Turn them on in Nyx Settings, under Agents.").class("foot"));
     }
     fill(vbox(out))
 }
@@ -540,9 +540,8 @@ fn agent_page(st: &State, h: &str) -> Node {
     if !u.quota.available {
         quota.push(dim(format!("{} reports no quota.", u.name)).margin(0, 12, 10, 12));
     } else if !u.quota.enabled {
-        quota.push(dim("Off. To check it with its own sign-in, add").margin(0, 12, 0, 12));
-        quota.push(label(format!("[usage] quotas = [\"{h}\"]")).class("transcript").margin(2, 12, 0, 12));
-        quota.push(dim("to ~/.config/nyx-agents/config.toml.").margin(2, 12, 10, 12));
+        quota.push(dim("Off. Turn it on in Nyx Settings, under Agents.").margin(0, 12, 0, 12));
+        quota.push(dim(format!("It's checked with {}'s own sign-in.", u.name)).margin(2, 12, 10, 12));
     } else {
         quota.extend(u.quota.windows.iter().map(window_block));
         if let Some(e) = &u.quota.error {

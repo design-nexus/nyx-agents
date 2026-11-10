@@ -81,7 +81,8 @@ change. `nyx-agents usage [AGENT] [--json] [--refresh]` prints it, and
   agent is working.
 - Recent sessions carry the session's first prompt as its title, so the full
   usage stays on the control socket (same user only) and out of `hub.json`.
-- Quotas are off until you list the agents in `~/.config/nyx-agents/config.toml`:
+- Quotas are off until you turn them on in Nyx Settings (Agents, Quotas), which
+  lists the agents in `~/.config/nyx-agents/config.toml`:
 
   ```toml
   [usage]
