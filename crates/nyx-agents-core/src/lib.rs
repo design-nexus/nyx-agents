@@ -1,9 +1,11 @@
 //! Nyx Agent Manager internals shared by the daemon, the app and the CLI.
 
 pub mod adapters;
+pub mod claude;
 pub mod discover;
 pub mod git;
 pub mod hub;
+pub mod inotify;
 pub mod paths;
 pub mod sanitize;
 pub mod store;

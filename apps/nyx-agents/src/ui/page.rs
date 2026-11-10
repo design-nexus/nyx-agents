@@ -11,6 +11,7 @@ use nyx_agents_proto::{Activity, AttachMode, Lifecycle, Session};
 use nyx_term_gtk::TerminalView;
 
 use super::daemon::{self, Attached};
+use super::inspector::Inspector;
 use super::theme;
 
 /// A session shown in a pane: its view and the live attachment, if any.
@@ -42,11 +43,13 @@ pub struct Page {
     area: gtk::Box,
     pub main: Rc<RefCell<Pane>>,
     pub split: Option<(Rc<RefCell<Pane>>, bool)>,
+    pub inspector: Rc<Inspector>,
     cwd: String,
 }
 
 type IdFn = Rc<dyn Fn(&str)>;
 type SplitFn = Rc<dyn Fn(&str, bool)>;
+type SourceFn = Rc<dyn Fn(&str) -> Option<nyx_agents_proto::SubagentSource>>;
 
 pub struct Actions {
     pub stop: IdFn,
@@ -58,6 +61,8 @@ pub struct Actions {
     pub open_git: IdFn,
     /// A pane's session ended or its holder went away.
     pub ended: IdFn,
+    /// Where a harness's subagent activity can be read, if anywhere.
+    pub subagent_source: SourceFn,
 }
 
 fn button(icon: &str, tooltip: &str) -> gtk::Button {
@@ -239,14 +244,14 @@ impl Page {
         let area = gtk::Box::new(gtk::Orientation::Vertical, 0);
         area.set_hexpand(true);
         area.set_vexpand(true);
-        // The lower panel: the read-only subagent inspector arrives in Phase 4.
-        let inspector = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        inspector.set_visible(false);
+        // The agent's terminal above, its subagents below (read-only).
         let column = gtk::Paned::new(gtk::Orientation::Vertical);
+        let inspector = Inspector::new(&column);
         column.set_start_child(Some(&area));
-        column.set_end_child(Some(&inspector));
+        column.set_end_child(Some(&inspector.root));
         column.set_resize_end_child(false);
-        column.set_shrink_end_child(true);
+        column.set_shrink_end_child(false);
+        column.set_shrink_start_child(false);
         column.set_vexpand(true);
         root.append(&column);
 
@@ -282,6 +287,7 @@ impl Page {
             area,
             main,
             split: None,
+            inspector,
             cwd: s.cwd.clone(),
         };
         let fb = page.find_bar.clone();
@@ -377,6 +383,7 @@ impl Page {
         self.git.set_visible(s.worktree.is_some());
         self.split_right.set_visible(self.split.is_none());
         self.split_down.set_visible(self.split.is_none());
+        self.inspector.update(s, (a.subagent_source)(&s.harness));
         Pane::update(&self.main, s, a);
     }
 

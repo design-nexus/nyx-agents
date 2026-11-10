@@ -382,8 +382,47 @@ fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), Rpc
     Ok(())
 }
 
+/// Follow a Claude session's subagents from its transcripts while it runs.
+/// Read only; inotify wakes it, the timeout only notices the session ending.
+fn watch_subagents(d: Arc<Daemon>, id: String) {
+    use nyx_agents_core::{claude, inotify::Watcher};
+    let Some((cwd, hs)) = d
+        .sessions
+        .lock()
+        .unwrap()
+        .get(&id)
+        .and_then(|s| (s.harness == "claude").then(|| s.harness_session.clone().map(|h| (s.cwd.clone(), h))).flatten())
+    else {
+        return;
+    };
+    let Ok(w) = Watcher::new() else { return };
+    let parent = adapters::claude_transcript(&cwd, &hs);
+    let mut subs = claude::Subagents::default();
+    loop {
+        if let Some(dir) = parent.parent() {
+            w.add(dir);
+        }
+        w.add(&parent.with_extension(""));
+        w.add(&claude::subagents_dir(&cwd, &hs));
+        if let Some(list) = subs.refresh(&cwd, &hs) {
+            d.update(&id, |s| s.subagents = list);
+        }
+        let live =
+            d.sessions.lock().unwrap().get(&id).is_some_and(|s| matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting));
+        if !live {
+            return;
+        }
+        w.wait(Duration::from_secs(2));
+    }
+}
+
 /// Follow one holder's events until it goes away.
 fn monitor(d: Arc<Daemon>, id: String) {
+    {
+        let d = d.clone();
+        let id = id.clone();
+        std::thread::spawn(move || watch_subagents(d, id));
+    }
     let ended_cleanly = (|| -> std::io::Result<bool> {
         let mut stream = UnixStream::connect(paths::session_socket(&id))?;
         let hello = Attach { attach: AttachMode::Events, foreground: None, background: None };

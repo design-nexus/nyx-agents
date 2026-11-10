@@ -90,6 +90,10 @@ pub fn run(args: &[String]) -> i32 {
                         println!("  message  {m}");
                     }
                     println!("  turn     {}", s.status.turn);
+                    for a in &s.subagents {
+                        let state = format!("{:?}", a.state).to_lowercase();
+                        println!("  subagent {:<10} {:<9} {}", a.name, state, a.description.as_deref().unwrap_or(""));
+                    }
                     if s.resumable {
                         println!("  resumable: nyx-agents resume {}", &s.id[..8]);
                     }

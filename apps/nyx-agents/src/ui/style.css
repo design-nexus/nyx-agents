@@ -50,3 +50,27 @@
   color: @theme_dim_text;
   font-size: 0.85em;
 }
+
+.agents-window .subagent-row {
+  padding: 4px 8px;
+  border-top: 1px solid @hairline;
+}
+
+.agents-window .inspector-label {
+  color: @theme_dim_text;
+  font-size: 0.85em;
+}
+
+.agents-window .subagent-tab {
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.agents-window .subagent-tab:checked {
+  background: @lift_active;
+}
+
+.agents-window .viewer-head {
+  padding: 4px 8px;
+  border-top: 1px solid @hairline;
+}

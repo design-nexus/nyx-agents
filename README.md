@@ -17,8 +17,10 @@ Status:
   sidebar (Needs you, Active, Recent, Projects), a tab per session with its
   status, branch and controls, a terminal beside or below the agent, find,
   restore of open tabs and splits, and `--open session/ID` deep links.
-- Next: harness adapters beyond Claude Code (Phase 3) and the read-only
-  subagent inspector (Phase 4).
+- **Phase 4 done (Claude Code).** The read-only Subagent Inspector: tabs for
+  each subagent under the agent's terminal and a live transcript viewer;
+  see [docs/INSPECTOR.md](docs/INSPECTOR.md).
+- Next: harness adapters beyond Claude Code (Phase 3).
 
 Install: `./install.sh agents` (builds, installs to `~/.local/bin`, and
 enables `nyx-agentd.socket`, which starts the manager on first use).

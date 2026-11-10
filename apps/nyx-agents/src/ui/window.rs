@@ -63,6 +63,10 @@ pub fn present(app: &gtk::Application) {
 /// `--open session/ID[/subagent/ID]`: show that session (ID may be a prefix).
 pub fn open_target(target: &str) {
     let parts: Vec<&str> = target.split('/').collect();
+    let sub = match parts.as_slice() {
+        ["session", _, "subagent", sub] => Some(sub.to_string()),
+        _ => None,
+    };
     let Some(id) = (match parts.as_slice() {
         ["session", id, ..] => Some(*id),
         _ => None,
@@ -73,7 +77,15 @@ pub fn open_target(target: &str) {
     let Some(ui) = cur() else { return };
     let found: Vec<String> = ui.sessions.borrow().keys().filter(|k| k.starts_with(id)).cloned().collect();
     match found.as_slice() {
-        [one] => open_session(one),
+        [one] => {
+            open_session(one);
+            if let Some(sub) = sub
+                && let Some(p) = ui.pages.borrow().iter().find(|p| p.borrow().id == *one)
+            {
+                let inspector = p.borrow().inspector.clone();
+                inspector.select(&sub);
+            }
+        }
         [] if !ui.connected.get() => *ui.pending_open.borrow_mut() = Some(target.to_string()),
         [] => toast("That session no longer exists"),
         _ => toast("That id matches more than one session"),
@@ -128,6 +140,9 @@ fn actions() -> Rc<Actions> {
             }
         }),
         ended: Rc::new(|_| {}),
+        subagent_source: Rc::new(|harness| {
+            cur().and_then(|ui| ui.harnesses.borrow().iter().find(|h| h.id == harness).and_then(|h| h.capabilities.subagents))
+        }),
     })
 }
 

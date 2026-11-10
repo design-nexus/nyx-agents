@@ -89,6 +89,7 @@ mod imp {
         pub(super) handlers: Handlers,
         pub(super) read_only: Cell<bool>,
         pub(super) answers_queries: Cell<bool>,
+        pub(super) fit: Cell<bool>,
         pub(super) focused: Cell<bool>,
         pub(super) buttons: Cell<u32>,
         pub(super) selecting: Cell<bool>,
@@ -202,6 +203,14 @@ impl TerminalView {
     /// otherwise the program would get every answer twice.
     pub fn set_answers_queries(&self, answers: bool) {
         self.imp().answers_queries.set(answers);
+    }
+
+    /// Let a read-only view size its terminal to the widget, for content
+    /// that is not a program's terminal (a rendered transcript). Mirrors of a
+    /// real terminal keep the program's grid instead.
+    pub fn set_fit(&self, fit: bool) {
+        self.imp().fit.set(fit);
+        self.queue_resize();
     }
 
     /// Run `f` on the terminal (for example to read text or take a snapshot).
@@ -382,7 +391,7 @@ impl TerminalView {
         let (cw, ch, pad) = self.cell_size();
         let cols = (((width as f32 - 2.0 * pad) / cw).floor() as i32).max(2) as u16;
         let rows = (((height as f32 - 2.0 * pad) / ch).floor() as i32).max(1) as u16;
-        if self.is_read_only() {
+        if self.is_read_only() && !self.imp().fit.get() {
             return;
         }
         let changed = self.with_state(|s| {
@@ -394,7 +403,7 @@ impl TerminalView {
             s.cache.clear();
             true
         });
-        if changed {
+        if changed && !self.is_read_only() {
             let px = ((cols as f32 * cw) as u32, (rows as f32 * ch) as u32);
             Self::emit(&self.imp().handlers.resize, &(cols, rows, px.0, px.1));
         }

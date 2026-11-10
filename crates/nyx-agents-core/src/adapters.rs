@@ -162,7 +162,12 @@ fn auth(b: &Builtin) -> AuthState {
 
 fn caps(id: &str) -> Capabilities {
     match id {
-        "claude" => Capabilities { preset_session_id: true, resume: true, ..Default::default() },
+        "claude" => Capabilities {
+            preset_session_id: true,
+            resume: true,
+            subagents: Some(nyx_agents_proto::SubagentSource::Transcript),
+            ..Default::default()
+        },
         _ => Capabilities::default(),
     }
 }

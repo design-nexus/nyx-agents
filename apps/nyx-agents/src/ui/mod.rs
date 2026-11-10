@@ -1,6 +1,7 @@
 //! The desktop app.
 
 mod daemon;
+mod inspector;
 mod page;
 mod prefs;
 mod theme;
