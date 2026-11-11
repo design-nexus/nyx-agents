@@ -16,8 +16,7 @@
 .meter levelbar block, levelbar.meter block.filled, levelbar.meter block.empty { min-height: 6px; border-radius: 3px; }
 .trail { margin-right: 10px; }
 .foot { font-size: 12px; color: @theme_dim_text; }
-.dot { color: @theme_warning; animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { from { opacity: 1; } to { opacity: 0.35; } }
+.dot { color: @theme_warning; }
 .needs { background-color: @theme_danger; color: @theme_bg; }
 .line { font-size: 12.5px; }
 .small { font-size: 11px; }

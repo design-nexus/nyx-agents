@@ -845,11 +845,11 @@ pub fn bar_item(st: &State) -> Node {
     let needs = l.iter().filter(|s| needs_you(s)).count();
     let working = l.iter().filter(|s| s.status.activity == Activity::Working).count();
     hbox([
-        sparkle(16),
+        icon("nyx-ai-hub-symbolic"),
         label(working.to_string()).id("working").class("dim").visible(working > 0),
         badge(needs.to_string()).id("needs").class("needs").visible(needs > 0),
     ])
-    .spacing(5)
+    .spacing(4)
     .tooltip(&format!("AI Hub · {}", summary(st)))
 }
 
