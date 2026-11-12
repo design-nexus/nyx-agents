@@ -31,12 +31,6 @@
   padding: 4px 8px;
 }
 
-.agents-window paned > separator {
-  min-width: 1px;
-  min-height: 1px;
-  background: @hairline;
-}
-
 .agents-window .new-session-menu {
   min-width: 300px;
 }

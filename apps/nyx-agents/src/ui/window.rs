@@ -333,10 +333,6 @@ fn build(app: &gtk::Application) {
     column.set_hexpand(true);
     column.append(&tab_row.root);
     column.append(&stack);
-    let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    body.set_vexpand(true);
-    body.append(&sidebar.root);
-    body.append(&column);
 
     let header = chrome::app_header(&window, "utilities-terminal-symbolic", "Agents");
     let collapse = nyx_ui::widgets::bar_button("sidebar-show-symbolic", "Collapse the sidebar (Ctrl+B)");
@@ -380,13 +376,12 @@ fn build(app: &gtk::Application) {
         tab_row.connect_new(move || nb.popup());
     }
 
-    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    frame.add_css_class("window-frame");
-    frame.append(&header.root);
-    frame.append(&body);
-    let overlay = gtk::Overlay::new();
-    overlay.set_child(Some(&frame));
-    window.set_child(Some(&overlay));
+    // The tabs sit at the top of the page; the terminals reach the sheet's edges.
+    let frame = nyx_ui::frame::AppFrame::new(&header.root);
+    frame.set_sidebar(&sidebar.root);
+    frame.set_page(&column);
+    frame.set_flush(true);
+    let overlay = frame.install(&window);
 
     let folder = {
         let last = prefs::get().last_folder;
