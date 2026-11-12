@@ -65,6 +65,17 @@ window.agents-window menubutton.new-button > button:checked {
 
 .agents-window .agents-group.first { margin-top: 4px; }
 
+window.agents-window button.flat.close-all {
+  min-height: 0;
+  padding: 1px 8px;
+  margin: 0 2px 2px 0;
+  font-size: 0.846em;
+  font-weight: 500;
+  color: @theme_text_tertiary;
+}
+
+window.agents-window button.flat.close-all:hover { color: @theme_danger; }
+
 .agents-window .settings-navigation button.nav-item.session-row {
   padding: 7px 10px;
   min-height: 0;
@@ -310,7 +321,6 @@ window.agents-window button.flat.session-title {
 /* ---------- New session ---------- */
 
 .agents-window .new-session-menu {
-  min-width: 360px;
   padding: 6px;
 }
 

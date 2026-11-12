@@ -8,7 +8,7 @@ use nyx_ui::widgets;
 use super::prefs;
 
 const GROUPS: &[(&str, &str, &str)] = &[
-    ("Sessions", "utilities-terminal-symbolic", "The agent new sessions start with"),
+    ("Sessions", "utilities-terminal-symbolic", "The agent and folder new sessions start with"),
     ("Notifications", "preferences-system-notifications-symbolic", "When an agent needs you"),
 ];
 
@@ -86,6 +86,28 @@ fn page(harnesses: &[Harness]) -> (gtk::Widget, gtk::Box) {
             eprintln!("nyx-agents: could not save the default agent: {e}");
         }
     });
+    sessions.append(&row);
+    let folder = crate::settings::default_folder();
+    let (row, _) = widgets::button_row(
+        "Folder",
+        "Where new sessions start. New session goes back to it after each start.",
+        &nyx_core::paths::pretty(std::path::Path::new(&folder)),
+        |b| {
+            let dialog = gtk::FileDialog::builder().title("New sessions start in").modal(true).build();
+            dialog.set_initial_folder(Some(&gtk::gio::File::for_path(crate::settings::default_folder())));
+            let b = b.clone();
+            dialog.select_folder(widgets::main_window().as_ref(), gtk::gio::Cancellable::NONE, move |r| {
+                let Some(path) = r.ok().and_then(|f| f.path()) else { return };
+                let path = path.display().to_string();
+                if let Err(e) = crate::settings::set_default_folder(&path) {
+                    eprintln!("nyx-agents: could not save the default folder: {e}");
+                    return;
+                }
+                b.set_label(&nyx_core::paths::pretty(std::path::Path::new(&path)));
+                super::window::set_folder(&path);
+            });
+        },
+    );
     sessions.append(&row);
 
     let notifications = group(&body, "Notifications");

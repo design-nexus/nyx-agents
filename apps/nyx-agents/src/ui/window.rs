@@ -21,6 +21,9 @@ use super::prefs::{self, TabPref};
 /// Agents that get the computer-use tools for a desktop of their own.
 const DESKTOP_AGENTS: &[&str] = &["claude", "codex", "muse"];
 
+/// New session's width, in pixels.
+const NEW_MENU_WIDTH: i32 = 300;
+
 /// New session: an agent, a folder, two options and Start.
 struct NewMenu {
     button: gtk::MenuButton,
@@ -616,14 +619,7 @@ fn build(app: &gtk::Application) {
     frame.set_flush(true);
     let overlay = frame.install(&window);
 
-    let folder = {
-        let last = prefs::get().last_folder;
-        if !last.is_empty() && std::path::Path::new(&last).is_dir() {
-            last
-        } else {
-            nyx_core::paths::home().display().to_string()
-        }
-    };
+    let folder = crate::settings::default_folder();
     let ui = Rc::new(Ui {
         window: window.clone(),
         overlay,
@@ -934,6 +930,85 @@ fn group_heading(text: &str, first: bool) -> gtk::Label {
     l
 }
 
+/// The first live group's heading, with Close all at its right.
+fn live_heading(text: &str, first: bool) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    row.add_css_class("compact-hide");
+    let label = group_heading(text, first);
+    label.set_hexpand(true);
+    row.append(&label);
+    let b = gtk::Button::with_label("Close all");
+    b.add_css_class("flat");
+    b.add_css_class("close-all");
+    b.set_valign(gtk::Align::End);
+    b.set_tooltip_text(Some("Stop every running session and close its tab; they stay under Recent"));
+    b.connect_clicked(|_| close_all());
+    row.append(&b);
+    row
+}
+
+/// Stop every live session (asking first) and close their tabs.
+fn close_all() {
+    let Some(ui) = cur() else { return };
+    let ids: Vec<String> = ui.sessions.borrow().values().filter(|s| live(s)).map(|s| s.id.clone()).collect();
+    if ids.is_empty() {
+        return;
+    }
+    let n = ids.len();
+    let (dialog, card) =
+        nyx_ui::widgets::dialog(&format!("Close all {n} running session{}?", if n == 1 { "" } else { "s" }), 420);
+    let desc = nyx_ui::widgets::label(
+        "Every running agent and terminal is asked to stop, and forced if it doesn't within a few seconds. Their tabs close; they stay under Recent, where agents that support it can be resumed.",
+        "dim",
+    );
+    desc.set_wrap(true);
+    desc.set_xalign(0.0);
+    card.append(&desc);
+    let buttons = nyx_ui::widgets::hbox(8);
+    buttons.set_halign(gtk::Align::End);
+    buttons.set_margin_top(6);
+    let cancel = gtk::Button::with_label("Cancel");
+    cancel.add_css_class("flat");
+    let ok = gtk::Button::with_label("Close all");
+    ok.add_css_class("destructive-action");
+    buttons.append(&cancel);
+    buttons.append(&ok);
+    card.append(&buttons);
+    let d = dialog.clone();
+    cancel.connect_clicked(move |_| d.close());
+    let d = dialog.clone();
+    ok.connect_clicked(move |_| {
+        d.close();
+        let Some(ui) = cur() else { return };
+        for id in &ids {
+            ui.stopping.borrow_mut().insert(id.clone());
+            close_session_tab(id);
+        }
+        let ids = ids.clone();
+        daemon::request(
+            move |c| {
+                for id in &ids {
+                    let _ = c.stop(id, false);
+                }
+                let mut left: Vec<&String> = ids.iter().filter(|id| !wait_ended(c, id, 5)).collect();
+                for id in &left {
+                    let _ = c.stop(id, true);
+                }
+                left.retain(|id| !wait_ended(c, id, 3));
+                Ok(left.len())
+            },
+            |r| match r {
+                Ok(0) => {}
+                Ok(n) => toast(&format!("{n} session{} would not stop", if n == 1 { "" } else { "s" })),
+                Err(e) => toast(&e),
+            },
+        );
+        refresh_sidebar();
+    });
+    dialog.present();
+    cancel.grab_focus();
+}
+
 fn session_row(s: &Session, active: bool) -> gtk::Button {
     let b = gtk::Button::new();
     b.add_css_class("nav-item");
@@ -980,11 +1055,15 @@ fn refresh_sidebar() {
     list.sort_by_key(rank);
     let live_list: Vec<&Session> = list.iter().filter(|s| live(s)).collect();
     let mut first = true;
-    let group = |title: &str, items: Vec<&Session>, first: &mut bool| {
+    let group = |title: &str, items: Vec<&Session>, first: &mut bool, close_all: bool| {
         if items.is_empty() {
             return;
         }
-        sb.append(&group_heading(title, *first));
+        if close_all {
+            sb.append(&live_heading(title, *first));
+        } else {
+            sb.append(&group_heading(title, *first));
+        }
         *first = false;
         for s in items {
             let item = session_row(s, active_id.as_deref() == Some(s.id.as_str()));
@@ -1001,14 +1080,17 @@ fn refresh_sidebar() {
             sb.append(&item);
         }
     };
-    group("Needs you", live_list.iter().filter(|s| s.status.activity == Activity::Blocked).copied().collect(), &mut first);
-    group("Active", live_list.iter().filter(|s| s.status.activity != Activity::Blocked).copied().collect(), &mut first);
+    let needs: Vec<&Session> = live_list.iter().filter(|s| s.status.activity == Activity::Blocked).copied().collect();
+    // Close all sits on the first heading of the live sessions.
+    let close_on_needs = !needs.is_empty();
+    group("Needs you", needs, &mut first, close_on_needs);
+    group("Active", live_list.iter().filter(|s| s.status.activity != Activity::Blocked).copied().collect(), &mut first, !close_on_needs);
     let mut ended: Vec<&Session> = list.iter().filter(|s| !live(s)).collect();
     ended.sort_by_key(|s| std::cmp::Reverse(s.ended.unwrap_or(s.created)));
     if query.is_empty() {
         ended.truncate(8);
     }
-    group("Recent", ended, &mut first);
+    group("Recent", ended, &mut first, false);
     if !query.is_empty() && list.is_empty() {
         let hint = gtk::Label::new(Some("No session matches"));
         hint.add_css_class("dim-label");
@@ -1285,7 +1367,11 @@ fn fill_folder_chips() {
     let current = ui.folder.borrow().clone();
     for f in recent_folders() {
         let name = std::path::Path::new(&f).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| f.clone());
-        let b = gtk::Button::with_label(&name);
+        let l = gtk::Label::new(Some(&name));
+        l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        l.set_max_width_chars(14);
+        let b = gtk::Button::new();
+        b.set_child(Some(&l));
         b.add_css_class("chip");
         if f == current {
             b.add_css_class("selected");
@@ -1296,7 +1382,7 @@ fn fill_folder_chips() {
     }
 }
 
-fn set_folder(path: &str) {
+pub(super) fn set_folder(path: &str) {
     let Some(ui) = cur() else { return };
     *ui.folder.borrow_mut() = path.to_string();
     let pretty = nyx_core::paths::pretty(std::path::Path::new(path));
@@ -1333,8 +1419,10 @@ fn update_new_options() {
     let in_repo = nyx_agents_core::git::context(std::path::Path::new(&*ui.folder.borrow())).is_some();
     ui.new.worktree_row.set_sensitive(in_repo);
     ui.new.worktree_row.set_tooltip_text((!in_repo).then_some("This folder isn't in a git repository"));
-    ui.new.desktop_row.set_visible(DESKTOP_AGENTS.contains(&choice.as_str()));
-    ui.new.start.set_label(&format!("Start {}", agent_name(&choice)));
+    // Greyed out rather than hidden, so the popover keeps its size.
+    let can_drive = DESKTOP_AGENTS.contains(&choice.as_str());
+    ui.new.desktop_row.set_sensitive(can_drive);
+    ui.new.desktop_row.set_tooltip_text((!can_drive).then_some("Only Claude Code, Codex and Muse can drive a desktop"));
     ui.new.start.set_sensitive(!choice.is_empty());
     let mut c = ui.new.agents.first_child();
     while let Some(child) = c {
@@ -1360,7 +1448,7 @@ fn option_row(title: &str, desc: &str, switch: &gtk::Switch) -> gtk::Box {
     d.add_css_class("session-meta");
     d.set_xalign(0.0);
     d.set_wrap(true);
-    d.set_max_width_chars(36);
+    d.set_max_width_chars(30);
     text.append(&t);
     text.append(&d);
     switch.set_valign(gtk::Align::Center);
@@ -1381,6 +1469,8 @@ fn heading(text: &str) -> gtk::Label {
 fn new_session_menu() -> NewMenu {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
     content.add_css_class("new-session-menu");
+    // One size whatever is chosen: the text inside ellipsizes or wraps to fit.
+    content.set_size_request(NEW_MENU_WIDTH, -1);
     let agents = gtk::FlowBox::new();
     agents.set_selection_mode(gtk::SelectionMode::None);
     agents.set_min_children_per_line(2);
@@ -1392,6 +1482,7 @@ fn new_session_menu() -> NewMenu {
     folder_label.set_xalign(0.0);
     folder_label.set_hexpand(true);
     folder_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    folder_label.set_max_width_chars(24);
     let folder_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     folder_box.append(&gtk::Image::from_icon_name("folder-symbolic"));
     folder_box.append(&folder_label);
@@ -1422,6 +1513,8 @@ fn new_session_menu() -> NewMenu {
     let foot = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     foot.set_margin_top(6);
     let hint = gtk::Label::new(Some("Enter starts · remembered next time"));
+    hint.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    hint.set_width_chars(8);
     hint.add_css_class("session-meta");
     hint.set_hexpand(true);
     hint.set_xalign(0.0);
@@ -1597,6 +1690,7 @@ fn fill_new_menu() {
         n.set_xalign(0.0);
         n.set_hexpand(true);
         n.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        n.set_max_width_chars(10);
         row.append(&n);
         if h.id == last {
             let l = gtk::Label::new(Some("last"));
@@ -1674,6 +1768,8 @@ fn launch(harness: &str, with_options: bool) {
                 // The reply was built before the program started; events may be newer.
                 ui.sessions.borrow_mut().entry(s.id.clone()).or_insert_with(|| s.clone());
                 open_session(&s.id);
+                // The next one starts in the default folder again.
+                set_folder(&crate::settings::default_folder());
                 refresh_sidebar();
             }
             Err(e) => toast(&e),

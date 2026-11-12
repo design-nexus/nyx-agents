@@ -42,6 +42,19 @@ pub fn set_default_harness(id: &str) -> std::io::Result<()> {
     set("sessions", "default_harness", toml::Value::String(id.into()))
 }
 
+/// The folder new sessions start in: the one chosen, else ~/Projects, else home.
+pub fn default_folder() -> String {
+    let home = nyx_agents_core::paths::home();
+    get_str(&config(), "sessions", "default_folder")
+        .filter(|p| std::path::Path::new(p).is_dir())
+        .or_else(|| Some(home.join("Projects")).filter(|p| p.is_dir()).map(|p| p.display().to_string()))
+        .unwrap_or_else(|| home.display().to_string())
+}
+
+pub fn set_default_folder(path: &str) -> std::io::Result<()> {
+    set("sessions", "default_folder", toml::Value::String(path.into()))
+}
+
 pub fn notifications() -> bool {
     get_bool(&config(), "notifications", "enabled", true)
 }
@@ -129,7 +142,9 @@ fn page() -> Value {
             ]},
             { "title": "New sessions", "rows": [
                 { "kind": "choice", "key": "default_harness", "title": "Agent", "desc": "Listed first in New session.",
-                  "value": get_str(&cfg, "sessions", "default_harness").unwrap_or_default(), "options": options }
+                  "value": get_str(&cfg, "sessions", "default_harness").unwrap_or_default(), "options": options },
+                { "kind": "info", "key": "default_folder", "title": "Folder", "value": default_folder(),
+                  "desc": "Where new sessions start. Change it in Agents' settings (Ctrl+,)." }
             ]},
             { "title": "Quotas", "note": "Shown in the AI Hub. Each is checked every few minutes while on; sign-ins are read by the session manager only and sent only to their provider.", "rows": quota_rows },
             { "title": "Agents on this computer", "note": "Found on your PATH and in mise's installs. Shims are never run.", "rows": rows },
