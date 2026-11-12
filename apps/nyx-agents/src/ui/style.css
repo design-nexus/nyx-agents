@@ -1,64 +1,174 @@
 /* Nyx Agents on top of the shared 2.0 base. Colours come from theme tokens. */
 
 .agents-window .session-bar {
-  min-height: 34px;
-  padding: 0 8px;
+  min-height: 44px;
+  padding: 0 8px 0 6px;
 }
 
 .agents-window .session-bar .session-meta {
   color: @theme_dim_text;
 }
 
-.agents-window .status-pill {
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 0.85em;
-  background: @lift;
+window.agents-window button.flat.session-title {
+  color: @theme_text;
+  font-weight: 600;
+  padding: 2px 8px;
+  min-height: 0;
 }
 
-.agents-window .status-pill.working { background: alpha(@theme_accent, 0.22); }
-.agents-window .status-pill.blocked { background: alpha(@theme_danger, 0.30); }
-.agents-window .status-pill.done { background: alpha(@theme_highlight, 0.30); }
+.agents-window .stop-button {
+  color: @theme_danger;
+}
+
+.agents-window .status-pill {
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.85em;
+  font-weight: 600;
+  background: @lift;
+  color: @theme_dim_text;
+}
+
+.agents-window .status-pill.working { background: alpha(@theme_accent, 0.18); color: @theme_accent; }
+.agents-window .status-pill.blocked { background: alpha(@theme_warning, 0.22); color: @theme_warning; }
+.agents-window .status-pill.done { background: alpha(@theme_success, 0.18); color: @theme_success; }
+.agents-window .status-pill.failed { background: alpha(@theme_danger, 0.18); color: @theme_danger; }
 
 .agents-window .ended-banner {
-  margin: 0 8px 6px;
-  padding: 6px 10px;
+  margin: 10px 12px 6px;
+  padding: 10px 12px;
   border-radius: 11px;
   background: @lift;
 }
+
+.agents-window .ended-banner > image { color: @theme_dim_text; }
+.agents-window .ended-banner.done > image { color: @theme_success; }
+.agents-window .ended-banner.failed { background: alpha(@theme_danger, 0.10); }
+.agents-window .ended-banner.failed > image { color: @theme_danger; }
+.agents-window .ended-title { font-weight: 600; }
 
 .agents-window .find-bar {
   padding: 4px 8px;
 }
 
-.agents-window .new-session-menu {
-  min-width: 300px;
+/* Sidebar rows: the state, the title, and the agent and what it's doing below. */
+.agents-window .settings-navigation button.nav-item.session-row {
+  padding: 6px 10px;
+  min-height: 0;
 }
 
-.agents-window .new-session-menu checkbutton {
-  padding: 2px 6px;
+.agents-window .session-row .session-sub {
+  color: @theme_text_tertiary;
+  font-size: 0.85em;
+}
+
+.agents-window .nav-icon.blocked { color: @theme_warning; }
+.agents-window .nav-icon.working { color: @theme_accent; }
+.agents-window .nav-icon.done { color: @theme_success; }
+.agents-window .nav-icon.failed { color: @theme_danger; }
+
+.agents-window .sidebar-sep {
+  margin: 10px 6px;
+}
+
+/* New session */
+.agents-window .new-session-menu {
+  min-width: 360px;
+  padding: 6px;
 }
 
 .agents-window .new-session-folder {
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: 7px;
+  background: @field;
 }
 
-.agents-window .new-session-list {
-  background: transparent;
-}
-
-.agents-window .new-session-list row {
-  min-height: 30px;
-  padding: 2px 8px;
+.agents-window .new-agent {
+  padding: 8px 10px;
   border-radius: 7px;
+  background: @field;
 }
 
-.agents-window .new-session-list .harness-version {
+.agents-window .new-agent.selected {
+  background: @nav_active;
+  box-shadow: inset 0 0 0 1.5px @theme_accent;
+}
+
+.agents-window .new-option {
+  padding: 6px 2px;
+}
+
+.agents-window .harness-version {
   color: @theme_dim_text;
   font-size: 0.85em;
 }
 
+/* Nothing open */
+.agents-window .start-page {
+  padding: 24px;
+}
+
+.agents-window .start-page .empty-title {
+  font-size: 1.3em;
+  font-weight: 600;
+}
+
+.agents-window .start-tile {
+  min-width: 150px;
+  min-height: 64px;
+  padding: 12px;
+  border-radius: 11px;
+  background: @theme_card;
+}
+
+.agents-window .start-tile-name { font-weight: 600; }
+
+/* The agent's desktop beside its terminal */
+.agents-window .desktop-pane {
+  border-left: 1px solid @sheet_line;
+}
+
+.agents-window .desktop-head {
+  min-height: 36px;
+  padding: 0 6px 0 12px;
+}
+
+.agents-window .desktop-title { font-weight: 600; }
+
+/* History */
+.agents-window .history-title {
+  font-weight: 600;
+  margin: 0 4px 0 8px;
+}
+
+.agents-window .history-list {
+  padding: 4px 12px 16px;
+}
+
+.agents-window .history-day {
+  color: @theme_text_tertiary;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin: 14px 8px 4px;
+}
+
+window.agents-window button.flat.history-row {
+  padding: 6px 10px;
+  border-radius: 7px;
+  color: @theme_text;
+  font-weight: 400;
+}
+
+.agents-window .history-item.open {
+  background: @theme_card;
+  border-radius: 11px;
+}
+
+.agents-window .history-details {
+  padding: 2px 12px 12px 12px;
+}
+
+/* Subagents */
 .agents-window .subagent-row {
   padding: 4px 8px;
 }

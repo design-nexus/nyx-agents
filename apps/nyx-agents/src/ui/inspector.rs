@@ -34,6 +34,8 @@ pub struct Inspector {
     session: RefCell<Option<(String, String, String, u64)>>,
     subs: RefCell<Vec<Subagent>>,
     paned: gtk::Paned,
+    /// Turned off from the session's More menu.
+    hidden: std::cell::Cell<bool>,
 }
 
 fn state_icon(s: SubagentState) -> &'static str {
@@ -106,6 +108,7 @@ impl Inspector {
             session: RefCell::new(None),
             subs: RefCell::new(Vec::new()),
             paned: paned.clone(),
+            hidden: Default::default(),
         });
         let weak = Rc::downgrade(&me);
         collapse.connect_clicked(move |_| {
@@ -125,7 +128,7 @@ impl Inspector {
         };
         *self.session.borrow_mut() = Some((s.harness.clone(), s.cwd.clone(), hs, s.created));
         *self.subs.borrow_mut() = s.subagents.clone();
-        self.root.set_visible(!s.subagents.is_empty());
+        self.root.set_visible(!s.subagents.is_empty() && !self.hidden.get());
         let mut buttons = self.buttons.borrow_mut();
         for sub in &s.subagents {
             let b = buttons.entry(sub.id.clone()).or_insert_with(|| {
@@ -156,6 +159,22 @@ impl Inspector {
         {
             self.viewer_title.set_text(&self.title_for(sub));
         }
+    }
+
+    pub fn has_subagents(&self) -> bool {
+        !self.subs.borrow().is_empty()
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        self.hidden.get()
+    }
+
+    pub fn set_hidden(&self, hidden: bool) {
+        self.hidden.set(hidden);
+        if hidden {
+            self.close_viewer();
+        }
+        self.root.set_visible(self.has_subagents() && !hidden);
     }
 
     fn title_for(&self, sub: &Subagent) -> String {

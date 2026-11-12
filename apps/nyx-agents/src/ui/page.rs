@@ -1,9 +1,9 @@
-//! One tab: a session's bar, its terminal (and optionally a second session
-//! split beside it), a find bar, and the slot where the subagent inspector
-//! will sit.
+//! One tab: the session bar (title, state, where it runs, Stop or Resume and
+//! Discard, More), its terminal (and optionally a terminal split beside it),
+//! a find bar, the subagents under it and the agent's desktop beside it.
 
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -15,6 +15,7 @@ use nyx_ui::menu;
 use super::daemon::{self, Attached};
 use super::inspector::Inspector;
 use super::theme;
+use super::workspace;
 
 /// A session shown in a pane: its view and the live attachment, if any.
 pub struct Pane {
@@ -23,23 +24,23 @@ pub struct Pane {
     pub view: Option<TerminalView>,
     attached: Option<Attached>,
     banner: gtk::Box,
+    banner_icon: gtk::Image,
+    banner_title: gtk::Label,
     banner_text: gtk::Label,
-    resume: gtk::Button,
-    forget: gtk::Button,
-    remove_worktree: gtk::Button,
+    open_log: gtk::Button,
     shown_lifecycle: Option<Lifecycle>,
 }
 
 pub struct Page {
     pub id: String,
     pub root: gtk::Box,
+    title: gtk::Label,
     meta: gtk::Label,
     pill: gtk::Label,
     stop: gtk::Button,
-    git: gtk::Button,
-    workspace: gtk::Button,
-    split_right: gtk::Button,
-    split_down: gtk::Button,
+    resume: gtk::Button,
+    retry: gtk::Button,
+    discard: gtk::Button,
     find_bar: gtk::Revealer,
     find_entry: gtk::SearchEntry,
     find_count: gtk::Label,
@@ -47,40 +48,60 @@ pub struct Page {
     pub main: Rc<RefCell<Pane>>,
     pub split: Option<(Rc<RefCell<Pane>>, bool)>,
     pub inspector: Rc<Inspector>,
+    /// The terminal column on the left, the agent's desktop on the right.
+    side: gtk::Paned,
+    desktop: Rc<RefCell<Option<workspace::Pane>>>,
     cwd: String,
 }
 
 type IdFn = Rc<dyn Fn(&str)>;
-type SplitFn = Rc<dyn Fn(&str, bool)>;
 type SourceFn = Rc<dyn Fn(&str) -> Option<nyx_agents_proto::SubagentSource>>;
 type MenuFn = Rc<dyn Fn(&str) -> Vec<menu::Entry>>;
 
 pub struct Actions {
+    /// Stop the session; Force stop when it was already asked to stop.
     pub stop: IdFn,
     pub resume: IdFn,
-    pub forget: IdFn,
-    /// Open a terminal beside (`false`) or below (`true`) the session.
-    pub split: SplitFn,
+    /// Start a session that didn't start again.
+    pub retry: IdFn,
+    /// Remove an ended session (asking first), stopping a live one.
+    pub discard: IdFn,
+    pub rename: IdFn,
     pub unsplit: IdFn,
-    pub open_git: IdFn,
-    /// Show an agent workspace's live view.
+    /// Show an agent workspace in a window of its own.
     pub show_workspace: IdFn,
-    pub remove_worktree: IdFn,
     /// A pane's session ended or its holder went away.
     pub ended: IdFn,
     /// Where a harness's subagent activity can be read, if anywhere.
     pub subagent_source: SourceFn,
-    /// A session's actions, for its right-click menus.
+    /// A session's actions, for its More and right-click menus.
     pub session_menu: MenuFn,
+    /// The agent's name ("Claude Code") for a harness id.
+    pub agent_name: Rc<dyn Fn(&str) -> String>,
+    /// Whether the session was asked to stop and is still running.
+    pub stopping: Rc<dyn Fn(&str) -> bool>,
 }
 
 fn button(icon: &str, tooltip: &str) -> gtk::Button {
     nyx_ui::widgets::bar_button(icon, tooltip)
 }
 
-pub fn status_text(s: &Session) -> (&'static str, &'static str) {
+pub fn live(s: &Session) -> bool {
+    matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting)
+}
+
+/// Ended without its program ever starting (no pid was ever reported).
+pub fn failed_start(s: &Session) -> bool {
+    !live(s) && s.pid.is_none()
+}
+
+pub fn status_text(s: &Session, stopping: bool) -> (&'static str, &'static str) {
+    if stopping && live(s) {
+        return ("Stopping…", "");
+    }
     match s.lifecycle {
         Lifecycle::Starting => ("Starting", ""),
+        _ if failed_start(s) => ("Didn't start", "failed"),
         Lifecycle::Exited => ("Ended", ""),
         Lifecycle::Lost => ("Not running", ""),
         Lifecycle::Running => match s.status.activity {
@@ -117,43 +138,43 @@ impl Pane {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.set_hexpand(true);
         root.set_vexpand(true);
-        let banner = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let banner = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         banner.add_css_class("ended-banner");
+        let banner_icon = gtk::Image::from_icon_name("object-select-symbolic");
+        banner_icon.set_valign(gtk::Align::Start);
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        text.set_hexpand(true);
+        let banner_title = gtk::Label::new(None);
+        banner_title.add_css_class("ended-title");
+        banner_title.set_xalign(0.0);
         let banner_text = gtk::Label::new(None);
+        banner_text.add_css_class("session-meta");
         banner_text.set_xalign(0.0);
-        banner_text.set_hexpand(true);
-        let resume = gtk::Button::with_label("Resume");
-        resume.set_tooltip_text(Some("Continue this conversation in a new run of the agent"));
-        let forget = gtk::Button::with_label("Forget");
-        forget.set_tooltip_text(Some("Remove this ended session and its history"));
-        let remove_worktree = gtk::Button::with_label("Remove worktree");
-        remove_worktree
-            .set_tooltip_text(Some("Delete this session's worktree folder if it has no uncommitted changes; the branch is kept"));
-        banner.append(&banner_text);
-        banner.append(&resume);
-        banner.append(&remove_worktree);
-        banner.append(&forget);
+        banner_text.set_wrap(true);
+        text.append(&banner_title);
+        text.append(&banner_text);
+        let open_log = gtk::Button::with_label("Open log");
+        open_log.add_css_class("flat");
+        open_log.set_valign(gtk::Align::Center);
+        let log = nyx_agents_core::paths::session_dir(&s.id).join("holder.log");
+        open_log.connect_clicked(move |_| {
+            let _ = std::process::Command::new("xdg-open").arg(&log).spawn();
+        });
+        banner.append(&banner_icon);
+        banner.append(&text);
+        banner.append(&open_log);
         banner.set_visible(false);
         root.append(&banner);
-        let id = s.id.clone();
-        let act = a.resume.clone();
-        resume.connect_clicked(move |_| act(&id));
-        let id = s.id.clone();
-        let act = a.forget.clone();
-        forget.connect_clicked(move |_| act(&id));
-        let id = s.id.clone();
-        let act = a.remove_worktree.clone();
-        remove_worktree.connect_clicked(move |_| act(&id));
         let pane = Rc::new(RefCell::new(Pane {
             id: s.id.clone(),
             root,
             view: None,
             attached: None,
             banner,
+            banner_icon,
+            banner_title,
             banner_text,
-            resume,
-            forget,
-            remove_worktree,
+            open_log,
             shown_lifecycle: None,
         }));
         Pane::update(&pane, s, a);
@@ -163,17 +184,20 @@ impl Pane {
     /// Show the live terminal while the session runs, its history after.
     fn update(pane: &Rc<RefCell<Pane>>, s: &Session, a: &Rc<Actions>) {
         let mut p = pane.borrow_mut();
-        let live = matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting);
+        let live = live(s);
         let was_live = matches!(p.shown_lifecycle, Some(Lifecycle::Running | Lifecycle::Starting));
         let reconnect = live && p.attached.as_ref().is_none_or(|a| !a.is_connected()) && p.shown_lifecycle != Some(s.lifecycle);
         if p.shown_lifecycle.is_some() && was_live == live && !reconnect {
             p.shown_lifecycle = Some(s.lifecycle);
-            p.update_banner(s);
+            p.update_banner(s, a);
             return;
         }
         p.shown_lifecycle = Some(s.lifecycle);
         if let Some(v) = p.view.take() {
             p.root.remove(&v);
+        }
+        if let Some(c) = p.root.last_child().filter(|c| c.has_css_class("empty-state")) {
+            p.root.remove(&c);
         }
         p.attached = None;
         let view = if live {
@@ -221,40 +245,69 @@ impl Pane {
                 }
             }
             None => {
-                let empty = nyx_ui::widgets::empty_state(
-                    "utilities-terminal-symbolic",
-                    "No history",
-                    "This session left nothing on screen.",
-                    None,
-                );
+                let empty = gtk::Label::new(Some(if failed_start(s) {
+                    "Nothing ran, so there is no screen to show."
+                } else {
+                    "It left nothing on screen."
+                }));
+                empty.add_css_class("session-meta");
+                empty.add_css_class("empty-state");
+                empty.set_vexpand(true);
                 p.root.append(&empty);
             }
         }
         p.view = view;
-        p.update_banner(s);
+        p.update_banner(s, a);
     }
 
-    fn update_banner(&self, s: &Session) {
-        let ended = !matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting);
+    /// Why the session ended, over its last screen.
+    fn update_banner(&self, s: &Session, a: &Rc<Actions>) {
+        let ended = !live(s);
         self.banner.set_visible(ended);
-        if ended {
-            let why = match (s.lifecycle, s.exit_code) {
-                (Lifecycle::Lost, _) => "This session stopped when its holder went away (for example a restart).".to_string(),
-                (_, Some(0)) => "The agent finished.".to_string(),
-                (_, Some(c)) if c > 128 => format!("The agent was stopped (signal {}).", c - 128),
-                (_, Some(c)) => format!("The agent exited with code {c}."),
-                _ => "The agent ended.".to_string(),
-            };
-            self.banner_text.set_text(&format!("{why} Showing its last screen."));
-            self.resume.set_visible(s.resumable);
+        if !ended {
+            return;
         }
-        let own_worktree = s.worktree.as_ref().is_some_and(|w| {
-            w.linked
-                && std::path::Path::new(&w.root).starts_with(nyx_agents_core::worktree::root())
-                && std::path::Path::new(&w.root).exists()
-        });
-        self.remove_worktree.set_visible(ended && own_worktree);
-        self.forget.set_visible(ended);
+        let who = if s.harness == "shell" { "The terminal".to_string() } else { (a.agent_name)(&s.harness) };
+        let failed = failed_start(s);
+        let (icon, kind, title, text) = match (s.lifecycle, s.exit_code) {
+            _ if failed => (
+                "dialog-warning-symbolic",
+                "failed",
+                format!("{who} didn't start"),
+                "The program ended before it opened a terminal. Its log says why.".to_string(),
+            ),
+            (Lifecycle::Lost, _) => (
+                "dialog-information-symbolic",
+                "",
+                format!("{who} stopped running"),
+                "Its holder went away (for example after a restart). Below is its last screen.".to_string(),
+            ),
+            (_, Some(0)) => ("object-select-symbolic", "done", format!("{who} finished"), "Below is its last screen.".to_string()),
+            (_, Some(c)) if c > 128 => (
+                "media-playback-stop-symbolic",
+                "",
+                format!("{who} was stopped"),
+                format!("It ended on signal {}. Below is its last screen.", c - 128),
+            ),
+            (_, Some(c)) => (
+                "dialog-information-symbolic",
+                "",
+                format!("{who} exited with code {c}"),
+                "Below is its last screen.".to_string(),
+            ),
+            _ => ("media-playback-stop-symbolic", "", format!("{who} ended"), "Below is its last screen.".to_string()),
+        };
+        let text = if s.resumable && !failed { format!("{text} Resume picks up the conversation.") } else { text };
+        self.banner_icon.set_icon_name(Some(icon));
+        for c in ["failed", "done"] {
+            self.banner.remove_css_class(c);
+        }
+        if !kind.is_empty() {
+            self.banner.add_css_class(kind);
+        }
+        self.banner_title.set_text(&title);
+        self.banner_text.set_text(&text);
+        self.open_log.set_visible(failed);
     }
 }
 
@@ -264,29 +317,46 @@ impl Page {
         root.set_hexpand(true);
         root.set_vexpand(true);
 
-        let bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let bar = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         bar.add_css_class("session-bar");
+        let title = gtk::Label::new(None);
+        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        title.set_max_width_chars(40);
+        let title_button = gtk::Button::new();
+        title_button.set_child(Some(&title));
+        title_button.add_css_class("flat");
+        title_button.add_css_class("session-title");
+        title_button.set_valign(gtk::Align::Center);
+        title_button.set_tooltip_text(Some("Rename (F2)"));
         let pill = gtk::Label::new(None);
         pill.add_css_class("status-pill");
+        pill.set_valign(gtk::Align::Center);
         let meta = gtk::Label::new(None);
         meta.add_css_class("session-meta");
         meta.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
         meta.set_hexpand(true);
         meta.set_xalign(0.0);
-        let find = button("system-search-symbolic", "Find in the terminal (Ctrl+F)");
-        let split_right = button("view-dual-symbolic", "Open a terminal beside the agent (Ctrl+Shift+O)");
-        let split_down = button("view-paged-symbolic", "Open a terminal below the agent (Ctrl+Shift+E)");
-        let git = button("nyx-agents-branch-symbolic", "Open this repository in Nyx Git");
-        let workspace = button("video-display-symbolic", "Show the agent's workspace");
-        let stop = button("media-playback-stop-symbolic", "Stop the agent");
-        for w in [pill.upcast_ref::<gtk::Widget>(), meta.upcast_ref(), find.upcast_ref()] {
-            bar.append(w);
+        let stop = gtk::Button::with_label("Stop");
+        stop.add_css_class("stop-button");
+        let resume = gtk::Button::with_label("Resume");
+        resume.add_css_class("suggested-action");
+        resume.set_tooltip_text(Some("Continue this conversation in a new run of the agent"));
+        let retry = gtk::Button::with_label("Try again");
+        retry.set_tooltip_text(Some("Start it again in the same folder"));
+        let discard = gtk::Button::with_label("Discard");
+        discard.set_tooltip_text(Some("Remove this session from Agents"));
+        let more = button("view-more-symbolic", "More");
+        for b in [&stop, &resume, &retry, &discard] {
+            b.set_valign(gtk::Align::Center);
         }
-        bar.append(&split_right);
-        bar.append(&split_down);
-        bar.append(&git);
-        bar.append(&workspace);
+        bar.append(&title_button);
+        bar.append(&pill);
+        bar.append(&meta);
+        bar.append(&resume);
+        bar.append(&retry);
         bar.append(&stop);
+        bar.append(&discard);
+        bar.append(&more);
         root.append(&bar);
 
         let find_entry = gtk::SearchEntry::new();
@@ -314,38 +384,46 @@ impl Page {
         column.set_shrink_end_child(false);
         column.set_shrink_start_child(false);
         column.set_vexpand(true);
-        root.append(&column);
+        let side = gtk::Paned::new(gtk::Orientation::Horizontal);
+        side.set_start_child(Some(&column));
+        side.set_shrink_start_child(false);
+        side.set_shrink_end_child(false);
+        side.set_wide_handle(false);
+        side.set_vexpand(true);
+        root.append(&side);
 
         let main = Pane::new(s, a);
         area.append(&main.borrow().root);
 
         let id = s.id.clone();
+        let act = a.rename.clone();
+        title_button.connect_clicked(move |_| act(&id));
+        let id = s.id.clone();
         let act = a.stop.clone();
         stop.connect_clicked(move |_| act(&id));
         let id = s.id.clone();
-        let act = a.open_git.clone();
-        git.connect_clicked(move |_| act(&id));
-        if let Some(w) = s.workspace.clone() {
-            let act = a.show_workspace.clone();
-            workspace.connect_clicked(move |_| act(&w));
-        }
+        let act = a.resume.clone();
+        resume.connect_clicked(move |_| act(&id));
         let id = s.id.clone();
-        let act = a.split.clone();
-        split_right.connect_clicked(move |_| act(&id, false));
+        let act = a.retry.clone();
+        retry.connect_clicked(move |_| act(&id));
         let id = s.id.clone();
-        let act = a.split.clone();
-        split_down.connect_clicked(move |_| act(&id, true));
+        let act = a.discard.clone();
+        discard.connect_clicked(move |_| act(&id));
+        let id = s.id.clone();
+        let menu_for = a.session_menu.clone();
+        more.connect_clicked(move |b| menu::popup_below(b, menu_for(&id)));
 
         let page = Page {
             id: s.id.clone(),
             root,
+            title,
             meta,
             pill,
             stop,
-            git,
-            workspace,
-            split_right,
-            split_down,
+            resume,
+            retry,
+            discard,
             find_bar,
             find_entry,
             find_count,
@@ -353,15 +431,15 @@ impl Page {
             main,
             split: None,
             inspector,
+            side,
+            desktop: Rc::new(RefCell::new(None)),
             cwd: s.cwd.clone(),
         };
-        let fb = page.find_bar.clone();
-        let fe = page.find_entry.clone();
-        find.connect_clicked(move |_| {
-            fb.set_reveal_child(true);
-            fe.grab_focus();
-        });
         page.update(s, a);
+        // A session with a desktop shows it beside the terminal.
+        if live(s) && s.workspace.is_some() {
+            page.set_desktop(s.workspace.as_deref(), a);
+        }
         page
     }
 
@@ -422,15 +500,17 @@ impl Page {
     }
 
     pub fn update(&self, s: &Session, a: &Rc<Actions>) {
-        let (text, class) = status_text(s);
+        let stopping = (a.stopping)(&s.id);
+        let (text, class) = status_text(s, stopping);
         self.pill.set_text(text);
-        for c in ["working", "blocked", "done"] {
+        for c in ["working", "blocked", "done", "failed"] {
             self.pill.remove_css_class(c);
         }
         if !class.is_empty() {
             self.pill.add_css_class(class);
         }
-        let mut meta = vec![s.harness.clone()];
+        self.title.set_text(&s.title);
+        let mut meta = vec![(a.agent_name)(&s.harness)];
         if let Some(w) = &s.worktree
             && let Some(b) = &w.branch
         {
@@ -442,14 +522,29 @@ impl Page {
         }
         self.meta.set_text(&meta.join("  ·  "));
         self.meta.set_tooltip_text(Some(&s.cwd));
-        let live = matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting);
+        let live = live(s);
+        let failed = failed_start(s);
         self.stop.set_visible(live);
-        self.git.set_visible(s.worktree.is_some());
-        self.workspace.set_visible(s.workspace.is_some());
-        self.split_right.set_visible(self.split.is_none());
-        self.split_down.set_visible(self.split.is_none());
+        self.stop.set_label(if stopping {
+            "Force stop"
+        } else if s.harness == "shell" {
+            "Close"
+        } else {
+            "Stop"
+        });
+        self.stop.set_tooltip_text(Some(if stopping {
+            "End it now, without waiting for it to finish"
+        } else {
+            "Ask it to end; press again to force it"
+        }));
+        self.retry.set_visible(failed);
+        self.resume.set_visible(!live && !failed && s.resumable);
+        self.discard.set_visible(!live);
         self.inspector.update(s, (a.subagent_source)(&s.harness));
         Pane::update(&self.main, s, a);
+        if !live && self.desktop_shown() {
+            self.set_desktop(None, a);
+        }
     }
 
     pub fn update_split(&self, s: &Session, a: &Rc<Actions>) {
@@ -458,6 +553,44 @@ impl Page {
         {
             Pane::update(p, s, a);
         }
+    }
+
+    pub fn desktop_shown(&self) -> bool {
+        self.desktop.borrow().is_some()
+    }
+
+    /// Show workspace `ws` beside the terminal, or hide it (`None`).
+    pub fn set_desktop(&self, ws: Option<&str>, a: &Rc<Actions>) {
+        let Some(ws) = ws else {
+            self.side.set_end_child(None::<&gtk::Widget>);
+            self.desktop.borrow_mut().take();
+            return;
+        };
+        if self.desktop_shown() {
+            return;
+        }
+        let (slot, side): (Weak<RefCell<Option<workspace::Pane>>>, _) = (Rc::downgrade(&self.desktop), self.side.downgrade());
+        let hide = move || {
+            if let Some(side) = side.upgrade() {
+                side.set_end_child(None::<&gtk::Widget>);
+            }
+            if let Some(slot) = slot.upgrade() {
+                // Dropped after this click has been handled.
+                let pane = slot.borrow_mut().take();
+                glib::idle_add_local_once(move || drop(pane));
+            }
+        };
+        let (open, w) = (a.show_workspace.clone(), ws.to_string());
+        let pane = workspace::pane(ws, move || open(&w), hide);
+        self.side.set_end_child(Some(&pane.root));
+        let side = self.side.clone();
+        glib::idle_add_local_once(move || {
+            let w = side.width();
+            if w > 0 {
+                side.set_position(w * 54 / 100);
+            }
+        });
+        *self.desktop.borrow_mut() = Some(pane);
     }
 
     /// Put `s` beside (or below) the main session.
@@ -486,7 +619,7 @@ impl Page {
                     }
                 });
                 // Closing the split: a small button on the second pane's banner row.
-                let close = button("window-close-symbolic", "Close this split");
+                let close = button("window-close-symbolic", "Close the terminal");
                 close.set_halign(gtk::Align::End);
                 let id = self.id.clone();
                 let act = a.unsplit.clone();
@@ -495,8 +628,6 @@ impl Page {
                 self.split = Some((other, down));
             }
         }
-        self.split_right.set_visible(self.split.is_none());
-        self.split_down.set_visible(self.split.is_none());
     }
 
     pub fn cwd(&self) -> &str {

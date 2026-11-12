@@ -26,6 +26,9 @@ pub struct Prefs {
     /// Where the last new session started.
     pub last_folder: String,
     pub last_harness: String,
+    /// New session's options, kept from the last start.
+    pub new_worktree: bool,
+    pub new_desktop: bool,
 }
 
 impl Default for Prefs {
@@ -40,6 +43,8 @@ impl Default for Prefs {
             active: 0,
             last_folder: String::new(),
             last_harness: "claude".into(),
+            new_worktree: false,
+            new_desktop: false,
         }
     }
 }

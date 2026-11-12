@@ -1,7 +1,7 @@
 //! The hub's views, built from what the manager and AI Core report. Layout
 //! follows the approved mockup (docs/mockups, tools/aihub-mockup).
 
-use nyx_agents_proto::{Activity, BlockedOn, Lifecycle, Pace, PastSession, QuotaWindow, Session, Usage};
+use nyx_agents_proto::{Activity, BlockedOn, Lifecycle, Pace, QuotaWindow, Session, Usage};
 use nyx_plugin_sdk::protocol::view::Linear;
 use nyx_plugin_sdk::protocol::{Draw, Node, Paint};
 use nyx_plugin_sdk::view::*;
@@ -18,12 +18,6 @@ fn now() -> u64 {
 /// shrink them to their longest word.
 fn nb(s: &str) -> String {
     s.replace(' ', "\u{a0}")
-}
-
-/// One transcript line, short enough for a popover row.
-pub fn nb_trim(s: &str) -> String {
-    let s = s.trim_end();
-    if s.chars().count() > 90 { format!("{}…", s.chars().take(90).collect::<String>()) } else { s.to_string() }
 }
 
 pub fn ago(secs: u64) -> String {
@@ -248,6 +242,7 @@ pub fn popover(st: &State) -> Node {
                 sparkle(28),
                 fill(vbox([label("AI Hub").class("title"), dim(summary(st))])).expand(),
                 button("open-app", None, Some("list-add-symbolic")).tooltip("New session in Nyx Agents"),
+                button("history", None, Some("document-open-recent-symbolic")).tooltip("Past sessions, in Nyx Agents"),
                 button("open-app", Some("Agents"), Some("utilities-terminal-symbolic")),
             ])
             .spacing(10),
@@ -258,7 +253,7 @@ pub fn popover(st: &State) -> Node {
         if st.tab == t { b.class("on").class("active") } else { b }
     };
     top.push(
-        hbox([tab(Tab::Agents, "Agents", "tab:agents"), tab(Tab::Usage, "Usage", "tab:usage"), tab(Tab::Sessions, "Sessions", "tab:sessions"), tab(Tab::Local, "Local AI", "tab:local")])
+        hbox([tab(Tab::Agents, "Agents", "tab:agents"), tab(Tab::Usage, "Usage", "tab:usage"), tab(Tab::Local, "Local AI", "tab:local")])
             .spacing(2)
             .class("tabs"),
     );
@@ -269,7 +264,6 @@ pub fn popover(st: &State) -> Node {
         (Tab::Usage, Some(h)) => agent_page(st, h),
         (Tab::Usage, None) => usage_tab(st),
         (Tab::Agents, _) => agents_tab(st),
-        (Tab::Sessions, _) => sessions_tab(st),
         (Tab::Local, _) => local_tab(st),
     };
     let max = if st.host == Host::Bar { 520 } else { 600 };
@@ -613,139 +607,9 @@ fn agent_page(st: &State, h: &str) -> Node {
     if u.sessions.is_empty() {
         recent.push(dim("None yet.").margin(0, 12, 8, 12));
     }
-    recent.push(hbox([button(&format!("sessions:{h}"), Some(&format!("All {} sessions", u.name)), None).class("flat")]).margin(0, 6, 6, 6));
+    recent.push(hbox([button(&format!("history:{h}"), Some(&format!("All {} sessions", u.name)), None).class("flat")]).margin(0, 6, 6, 6));
     out.push(card(recent));
     fill(vbox(out))
-}
-
-// ---------- Sessions ----------
-
-fn day_of(secs: u64) -> (i32, i32, i32) {
-    let tm = local_tm(secs as i64);
-    (tm.tm_year, tm.tm_mon, tm.tm_mday)
-}
-
-fn sessions_tab(st: &State) -> Node {
-    if let Some(n) = offline(st) {
-        return fill(vbox([n]));
-    }
-    let mut agents: Vec<&str> = vec![];
-    for p in &st.history {
-        if !agents.contains(&p.harness.as_str()) {
-            agents.push(&p.harness);
-        }
-    }
-    let filt = |id: Option<&str>, name: String| {
-        let action = format!("filter:{}", id.unwrap_or("all"));
-        let b = button(&action, Some(&name), None).class("tab");
-        if st.filter.as_deref() == id { b.class("on").class("active") } else { b }
-    };
-    let mut filters = vec![filt(None, "All".into())];
-    for a in agents.iter().take(6) {
-        let n = name_of(st, a);
-        filters.push(filt(Some(a), n.split(' ').next().unwrap_or(&n).to_string()));
-    }
-    let mut out = vec![hbox(filters).spacing(2).class("tabs"), entry("query", &st.query, Some("Search titles and folders, then press Enter"))];
-    let q = st.query.to_lowercase();
-    let shown: Vec<&PastSession> = st
-        .history
-        .iter()
-        .filter(|p| st.filter.as_deref().is_none_or(|f| f == p.harness))
-        .filter(|p| q.is_empty() || p.title.to_lowercase().contains(&q) || p.cwd.to_lowercase().contains(&q))
-        .take(60)
-        .collect();
-    let today = day_of(now());
-    let yesterday = day_of(now() - 86400);
-    let mut group: Option<&str> = None;
-    let mut rows: Vec<Node> = vec![];
-    let flush = |out: &mut Vec<Node>, rows: &mut Vec<Node>, g: Option<&str>| {
-        if let Some(g) = g.filter(|_| !rows.is_empty()) {
-            out.push(section(g));
-            out.push(card(std::mem::take(rows)));
-        }
-    };
-    for p in &shown {
-        let d = day_of(p.updated);
-        let g = if d == today { "TODAY" } else if d == yesterday { "YESTERDAY" } else { "EARLIER" };
-        if group != Some(g) {
-            flush(&mut out, &mut rows, group);
-            group = Some(g);
-        }
-        let mut sub = vec![folder(&p.cwd), if d == today || d == yesterday { clock(p.updated) } else { ago(p.updated) }];
-        if p.active {
-            sub.push(if p.managed.is_some() { "running in Nyx Agents".into() } else { "running".into() });
-        } else if p.managed.is_some() {
-            sub.push("in Nyx Agents".into());
-        }
-        sub.retain(|s| !s.is_empty());
-        let key = (p.harness.clone(), p.id.clone());
-        let picked = st.picked.as_ref() == Some(&key);
-        let r = row(Some(&harness_icon(&p.harness)), &p.title, Some(sub.join(" · ")), Some(&format!("pick:{}:{}", p.harness, p.id)));
-        rows.push(if picked { r.class("picked") } else { r });
-        if picked {
-            rows.push(actions(st, p));
-        }
-    }
-    flush(&mut out, &mut rows, group);
-    if shown.is_empty() {
-        out.push(card([dim(if st.history.is_empty() { "No past sessions found." } else { "Nothing matches." }).margin(10, 12, 10, 12)]));
-    }
-    let n_agents = agents.len();
-    out.push(hbox([
-        label(format!("{} sessions from {n_agents} agent{}", st.history.len(), if n_agents == 1 { "" } else { "s" })).class("foot").expand(),
-        button("rescan", Some("Rescan"), Some("view-refresh-symbolic")),
-    ]));
-    fill(vbox(out))
-}
-
-fn actions(st: &State, p: &PastSession) -> Node {
-    let k = format!("{}:{}", p.harness, p.id);
-    let main = if p.active && p.managed.is_some() {
-        button(&format!("past:{k}"), Some("Open"), Some("go-next-symbolic")).class("suggested-action")
-    } else {
-        button(&format!("past:{k}"), Some("Resume"), Some("media-playback-start-symbolic")).class("suggested-action")
-    };
-    let mut buttons = vec![main];
-    if !p.active {
-        buttons.push(button(&format!("pterm:{k}"), Some("Terminal"), Some("utilities-terminal-symbolic")));
-    }
-    buttons.push(label("").expand());
-    buttons.push(button(&format!("peek:{k}"), None, Some("view-reveal-symbolic")).tooltip("Peek at the transcript"));
-    if !p.cwd.is_empty() {
-        buttons.push(button(&format!("folder:{k}"), None, Some("folder-open-symbolic")).tooltip("Open the folder"));
-    }
-    buttons.push(button(&format!("copy:{k}"), None, Some("edit-copy-symbolic")).tooltip("Copy the session ID"));
-    if p.can_trash {
-        let armed = st.armed.as_ref() == Some(&(p.harness.clone(), p.id.clone()));
-        buttons.push(if armed {
-            button(&format!("trash:{k}"), Some("Move to Trash"), Some("user-trash-symbolic")).class("destructive-action")
-        } else {
-            button(&format!("trash:{k}"), None, Some("user-trash-symbolic")).tooltip("Move to the Trash (click twice)").class("danger")
-        });
-    }
-    let mut where_ = vec![p.cwd.clone(), p.id.clone()];
-    if let Some(m) = &p.model {
-        where_.push(m.clone());
-    }
-    where_.push(format!("{} prompts", p.prompts));
-    where_.retain(|s| !s.is_empty());
-    let mut c = vec![hbox(buttons).spacing(4), label(where_.join(" · ")).class("dim").class("small").margin(6, 2, 0, 2)];
-    if let Some((h, id, text)) = &st.peek
-        && h == &p.harness
-        && id == &p.id
-    {
-        let body = match text {
-            // Its last lines, in place: a scroll inside the page's scroll gets no height.
-            Ok(t) => {
-                let lines: Vec<&str> = t.lines().filter(|l| !l.trim().is_empty()).collect();
-                let tail = &lines[lines.len().saturating_sub(14)..];
-                fill(vbox(tail.iter().map(|l| label(crate::views::nb_trim(l)).class("transcript"))))
-            }
-            Err(e) => dim(e.clone()),
-        };
-        c.push(body.class("peek").margin(6, 0, 0, 0));
-    }
-    fill(vbox(c)).margin(2, 10, 8, 36).class("actions")
 }
 
 // ---------- Local AI ----------

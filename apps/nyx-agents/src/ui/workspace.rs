@@ -117,14 +117,19 @@ pub fn removed(id: &str) {
     }
 }
 
+/// The live picture with its Take over switch, for a window or a session's pane.
+struct View {
+    body: gtk::Overlay,
+    take: gtk::ToggleButton,
+    driving: gtk::Label,
+    stop: Arc<AtomicBool>,
+}
+
 fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
     if let Some(win) = OPEN.with(|o| o.borrow().get(&w.id).cloned()) {
         win.present();
         return;
     }
-    let Some(socket) = w.wayland_socket().map(PathBuf::from) else { return };
-    let logical = ((w.width as f64 / w.scale).round().max(1.0), (w.height as f64 / w.scale).round().max(1.0));
-
     let window =
         gtk::Window::builder().title(format!("{} · Agent workspace", w.name)).default_width(1000).default_height(680).build();
     window.add_css_class("agents-window");
@@ -133,8 +138,112 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
     if let Some(p) = parent {
         window.set_transient_for(Some(p));
     }
+    let close: Rc<dyn Fn()> = {
+        let win = window.downgrade();
+        Rc::new(move || {
+            if let Some(w) = win.upgrade() {
+                w.close();
+            }
+        })
+    };
+    let Some(v) = build_view(w, close) else { return };
     let header = chrome::app_header(&window, "video-display-symbolic", "Agent workspace");
     header.set_subtitle(&w.name);
+    header.end.append(&v.driving);
+    header.end.append(&v.take);
+    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    frame.add_css_class("window-frame");
+    frame.append(&header.root);
+    frame.append(&v.body);
+    window.set_child(Some(&frame));
+
+    let id = w.id.clone();
+    let stop = v.stop.clone();
+    window.connect_close_request(move |_| {
+        stop.store(true, Ordering::SeqCst);
+        OPEN.with(|o| o.borrow_mut().remove(&id));
+        glib::Propagation::Proceed
+    });
+    OPEN.with(|o| o.borrow_mut().insert(w.id.clone(), window.clone()));
+    window.present();
+}
+
+/// The agent's desktop in its session's tab: a slim header (Take over, Open in
+/// a window, Hide) over the live picture.
+pub struct Pane {
+    pub root: gtk::Box,
+    stop: Rc<RefCell<Option<Arc<AtomicBool>>>>,
+}
+
+impl Drop for Pane {
+    fn drop(&mut self) {
+        if let Some(s) = self.stop.borrow_mut().take() {
+            s.store(true, Ordering::SeqCst);
+        }
+    }
+}
+
+pub fn pane(id: &str, on_window: impl Fn() + 'static, on_hide: impl Fn() + 'static) -> Pane {
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    root.add_css_class("desktop-pane");
+    let head = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    head.add_css_class("desktop-head");
+    head.append(&gtk::Image::from_icon_name("video-display-symbolic"));
+    let title = gtk::Label::new(Some("Desktop"));
+    title.add_css_class("desktop-title");
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    head.append(&title);
+    let controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    head.append(&controls);
+    let open = nyx_ui::widgets::bar_button("window-new-symbolic", "Open the desktop in a window");
+    let hide = nyx_ui::widgets::bar_button("window-close-symbolic", "Hide the desktop");
+    head.append(&open);
+    head.append(&hide);
+    open.connect_clicked(move |_| on_window());
+    let on_hide: Rc<dyn Fn()> = Rc::new(on_hide);
+    {
+        let on_hide = on_hide.clone();
+        hide.connect_clicked(move |_| on_hide());
+    }
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    body.set_vexpand(true);
+    let status = gtk::Label::new(Some("Connecting…"));
+    status.add_css_class("session-meta");
+    status.set_vexpand(true);
+    body.append(&status);
+    root.append(&head);
+    root.append(&body);
+
+    let stop: Rc<RefCell<Option<Arc<AtomicBool>>>> = Rc::new(RefCell::new(None));
+    let prefix = id.to_string();
+    let (slot, controls2, stop2) = (body.downgrade(), controls.downgrade(), stop.clone());
+    daemon::request(
+        move |c| c.call::<Vec<AgentWorkspace>>(Call::ListWorkspaces),
+        move |r| {
+            let (Some(body), Some(controls)) = (slot.upgrade(), controls2.upgrade()) else { return };
+            let found = r.ok().and_then(|l| l.into_iter().find(|w| w.id.starts_with(&prefix)));
+            let Some(v) = found.as_ref().and_then(|w| build_view(w, on_hide.clone())) else {
+                status.set_text("This desktop has ended.");
+                return;
+            };
+            body.remove(&status);
+            v.body.set_vexpand(true);
+            body.append(&v.body);
+            v.driving.set_text("You're driving");
+            controls.append(&v.driving);
+            controls.append(&v.take);
+            *stop2.borrow_mut() = Some(v.stop);
+        },
+    );
+    Pane { root, stop }
+}
+
+/// The picture, its capture and input, and its right-click menu; `close`
+/// closes whatever shows it.
+fn build_view(w: &AgentWorkspace, close: Rc<dyn Fn()>) -> Option<View> {
+    let socket = w.wayland_socket().map(PathBuf::from)?;
+    let logical = ((w.width as f64 / w.scale).round().max(1.0), (w.height as f64 / w.scale).round().max(1.0));
     let driving = gtk::Label::new(Some("You are driving: your pointer and keys go to the workspace"));
     driving.add_css_class("session-meta");
     driving.set_visible(false);
@@ -144,8 +253,6 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
     take.set_valign(gtk::Align::Center);
     take.set_tooltip_text(Some("Take over: send your pointer and keys into the workspace (the agent can still act too)"));
     take.update_property(&[gtk::accessible::Property::Label("Take over")]);
-    header.end.append(&driving);
-    header.end.append(&take);
 
     let picture = gtk::Picture::new();
     picture.set_content_fit(gtk::ContentFit::Contain);
@@ -160,12 +267,6 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
     status.set_halign(gtk::Align::Center);
     status.set_valign(gtk::Align::Center);
     body.add_overlay(&status);
-
-    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    frame.add_css_class("window-frame");
-    frame.append(&header.root);
-    frame.append(&body);
-    window.set_child(Some(&frame));
 
     let stop = Arc::new(AtomicBool::new(false));
     follow(&socket, &picture, &status, stop.clone());
@@ -199,13 +300,13 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
     }
     controllers(&picture, input, texture_size, logical);
     {
-        let (take, win, id) = (take.clone(), window.clone(), w.id.clone());
+        let (take, id) = (take.clone(), w.id.clone());
         nyx_ui::menu::on_right_click(&picture, move |pw, x, y| {
             // While you drive, right-clicks belong to the workspace.
             if take.is_active() {
                 return;
             }
-            let (t, wn, id) = (take.clone(), win.clone(), id.clone());
+            let (t, wn, id) = (take.clone(), close.clone(), id.clone());
             let (push_id, pull_id) = (id.clone(), id.clone());
             let note = |what: &'static str| {
                 move |r: Result<(), String>| {
@@ -226,7 +327,7 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
                 })
                 .icon("edit-copy-symbolic"),
                 nyx_ui::menu::separator(),
-                nyx_ui::menu::item("Close the view", move || wn.close()).icon("window-close-symbolic"),
+                nyx_ui::menu::item("Close the view", move || wn()).icon("window-close-symbolic"),
                 nyx_ui::menu::item("End this workspace", move || {
                     let id = id.clone();
                     daemon::request(move |c| c.call::<serde_json::Value>(Call::RemoveWorkspace { id }), |_| {});
@@ -237,15 +338,7 @@ fn present(w: &AgentWorkspace, parent: Option<&gtk::Window>) {
             nyx_ui::menu::popup_at(pw, x, y, entries);
         });
     }
-
-    let id = w.id.clone();
-    window.connect_close_request(move |_| {
-        stop.store(true, Ordering::SeqCst);
-        OPEN.with(|o| o.borrow_mut().remove(&id));
-        glib::Propagation::Proceed
-    });
-    OPEN.with(|o| o.borrow_mut().insert(w.id.clone(), window.clone()));
-    window.present();
+    Some(View { body, take, driving, stop })
 }
 
 /// Copy frames on a thread when the screen changes, at most every FRAME_GAP.

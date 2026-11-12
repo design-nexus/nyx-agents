@@ -14,9 +14,14 @@ Status:
   Code launches, runs and reattaches through it; the other nine harnesses
   are discovered and launch in the terminal.
 - **Phase 2 done.** The desktop app: a Design 2.0 window with the sessions
-  sidebar (Needs you, Active, Recent, Projects), a tab per session with its
-  status, branch and controls, a terminal beside or below the agent, find,
-  restore of open tabs and splits, and `--open session/ID` deep links.
+  sidebar (Needs you, Active, Recent, then History), a tab per session with
+  its title, state and place, Stop (then Force stop) while it runs and Resume
+  or Discard once it ends, everything else in its More menu, a terminal
+  beside or below the agent, the agent's desktop beside it, find, restore of
+  open tabs and splits, and `--open session/ID` and `--open history` deep
+  links. History lists every agent's past sessions (Resume here, Peek, In a
+  terminal, Move to Trash); the AI Hub's History button opens it. Mockups:
+  `nyx-design/mockups/agents/`.
 - **Phase 4 done (Claude Code).** The read-only Subagent Inspector: tabs for
   each subagent under the agent's terminal and a live transcript viewer;
   see [docs/INSPECTOR.md](docs/INSPECTOR.md).

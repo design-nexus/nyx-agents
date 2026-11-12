@@ -1,4 +1,4 @@
-//! Where the hub's data comes from: nyx-agentd (sessions, usage, past sessions)
+//! Where the hub's data comes from: nyx-agentd (sessions, usage)
 //! over its control socket, and Nyx AI Core (models, memory) over its own.
 
 use std::io::{BufRead, BufReader, Write};
@@ -7,18 +7,16 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use nyx_agents_client::Client;
-use nyx_agents_proto::{Call, Event, Harness, PastSession, Session, Usage};
+use nyx_agents_proto::{Call, Event, Harness, Session, Usage};
 use serde_json::{Value, json};
 
 pub enum Data {
     /// Connected (again): everything the manager knows.
-    Snapshot { sessions: Vec<Session>, usage: Vec<Usage>, history: Vec<PastSession>, harnesses: Vec<Harness> },
+    Snapshot { sessions: Vec<Session>, usage: Vec<Usage>, harnesses: Vec<Harness> },
     Event(Event),
-    History(Vec<PastSession>),
     Usage(Vec<Usage>),
     Disconnected,
     Local(Option<Local>),
-    Peek { harness: String, id: String, text: Result<String, String> },
     /// An action failed; say so.
     Failed(String),
     /// An action finished; refresh what it may have changed.
@@ -26,8 +24,6 @@ pub enum Data {
     /// Every five seconds: times move on, and AI Core is asked again.
     Tick,
 }
-
-const HISTORY_LIMIT: usize = 300;
 
 /// Follow the manager: a snapshot on connect, then its events. Connecting starts it
 /// (socket activation); after it goes away, try again every few seconds.
@@ -39,7 +35,6 @@ pub fn follow(send: impl Fn(Data) + Send + Clone + 'static) {
                     Some(Data::Snapshot {
                         sessions: c.sessions().ok()?,
                         usage: c.call(Call::ListUsage { refresh: false }).ok()?,
-                        history: c.call(Call::ListHistory { harness: None, query: None, limit: Some(HISTORY_LIMIT) }).ok()?,
                         harnesses: c.harnesses(false).ok()?,
                     })
                 })();
@@ -47,28 +42,13 @@ pub fn follow(send: impl Fn(Data) + Send + Clone + 'static) {
                     send(s);
                     if c.subscribe().is_ok() {
                         while let Ok(e) = c.next_event() {
-                            let usage = matches!(e, Event::Usage { .. });
                             send(Data::Event(e));
-                            // Past sessions change as the records do.
-                            if usage {
-                                history(send.clone());
-                            }
                         }
                     }
                 }
                 send(Data::Disconnected);
             }
             std::thread::sleep(Duration::from_secs(5));
-        }
-    });
-}
-
-pub fn history(send: impl Fn(Data) + Send + 'static) {
-    std::thread::spawn(move || {
-        let list = Client::connect("nyx-ai-hub")
-            .and_then(|mut c| c.call::<Vec<PastSession>>(Call::ListHistory { harness: None, query: None, limit: Some(HISTORY_LIMIT) }));
-        if let Ok(l) = list {
-            send(Data::History(l));
         }
     });
 }

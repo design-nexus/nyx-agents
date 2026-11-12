@@ -1,6 +1,7 @@
 //! The desktop app.
 
 mod daemon;
+mod history;
 mod inspector;
 mod page;
 mod prefs;
@@ -14,10 +15,11 @@ use gtk::{gio, glib};
 
 pub const APP_ID: &str = "io.github.design_nexus.nyx.Agents";
 
-const USAGE: &str = "Usage: nyx-agents [--open session/ID | --open workspace/ID]\n\
+const USAGE: &str = "Usage: nyx-agents [--open session/ID | --open workspace/ID | --open history[/AGENT]]\n\
 \n\
   --open session/ID     show that session (ID may be a unique prefix)\n\
   --open workspace/ID   show that agent workspace's live view\n\
+  --open history        show every agent's past sessions (history/claude: one agent's)\n\
 \n\
 Command line: nyx-agents help\n";
 

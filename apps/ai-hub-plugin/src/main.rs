@@ -1,6 +1,6 @@
 //! AI Hub, a Nyx Bar and Control Center plugin. It shows what Nyx Agents and Nyx
 //! AI Core report: agents that need you and what's working, each agent's usage and
-//! quota with its own page, past sessions to resume or tidy up, and local models.
+//! quota with its own page, and local models; past sessions open in Nyx Agents.
 //! It only reads and asks; the manager and AI Core do the work.
 
 mod diff;
@@ -10,7 +10,7 @@ mod views;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use nyx_agents_proto::{Call, Event, Harness, Launch, PastSession, Session, Usage};
+use nyx_agents_proto::{Call, Event, Harness, Launch, Session, Usage};
 use nyx_plugin_sdk::protocol::{EventKind, Item, NodePatch, Patch, PluginMsg, Popover};
 use nyx_plugin_sdk::view::*;
 use nyx_plugin_sdk::{Input, Plugin, spawn};
@@ -28,7 +28,6 @@ pub enum Host {
 pub enum Tab {
     Agents,
     Usage,
-    Sessions,
     Local,
 }
 
@@ -45,7 +44,6 @@ pub struct State {
     pub connected: bool,
     pub sessions: Vec<Session>,
     pub usage: Vec<Usage>,
-    pub history: Vec<PastSession>,
     pub harnesses: Vec<Harness>,
     pub local: Option<Local>,
     pub local_checked: bool,
@@ -53,13 +51,6 @@ pub struct State {
     /// The agent page open under Usage.
     pub agent: Option<String>,
     pub range: Range,
-    pub filter: Option<String>,
-    pub query: String,
-    /// The past session whose actions are open.
-    pub picked: Option<(String, String)>,
-    /// The past session whose Trash button was clicked once.
-    pub armed: Option<(String, String)>,
-    pub peek: Option<(String, String, Result<String, String>)>,
     /// A failure to mention, for a few seconds.
     pub notice: Option<String>,
     notice_at: Option<Instant>,
@@ -74,7 +65,6 @@ fn sort_usage(all: &mut [Usage]) {
 fn tab_named(s: &str) -> Tab {
     match s {
         "usage" => Tab::Usage,
-        "sessions" => Tab::Sessions,
         "local" => Tab::Local,
         _ => Tab::Agents,
     }
@@ -87,18 +77,12 @@ impl State {
             connected: false,
             sessions: vec![],
             usage: vec![],
-            history: vec![],
             harnesses: vec![],
             local: None,
             local_checked: false,
             tab: Tab::Agents,
             agent: None,
             range: Range::Today,
-            filter: None,
-            query: String::new(),
-            picked: None,
-            armed: None,
-            peek: None,
             notice: None,
             notice_at: None,
             open: false,
@@ -112,12 +96,11 @@ impl State {
 
     fn apply(&mut self, d: Data) {
         match d {
-            Data::Snapshot { sessions, mut usage, history, harnesses } => {
+            Data::Snapshot { sessions, mut usage, harnesses } => {
                 self.connected = true;
                 self.sessions = sessions;
                 sort_usage(&mut usage);
                 self.usage = usage;
-                self.history = history;
                 self.harnesses = harnesses;
             }
             Data::Event(Event::Session { session }) => match self.sessions.iter_mut().find(|s| s.id == session.id) {
@@ -138,7 +121,6 @@ impl State {
                 sort_usage(&mut list);
                 self.usage = list;
             }
-            Data::History(h) => self.history = h,
             Data::Disconnected => {
                 self.connected = false;
                 self.sessions.clear();
@@ -147,7 +129,6 @@ impl State {
                 self.local = l;
                 self.local_checked = true;
             }
-            Data::Peek { harness, id, text } => self.peek = Some((harness, id, text)),
             Data::Failed(e) => self.say(e),
             Data::Done | Data::Tick => {}
         }
@@ -156,15 +137,16 @@ impl State {
             self.notice_at = None;
         }
     }
-
-    fn past(&self, key: &str) -> Option<&PastSession> {
-        let (h, id) = key.split_once(':')?;
-        self.history.iter().find(|p| p.harness == h && p.id == id)
-    }
 }
 
 fn open_session(id: &str) {
     spawn(&["nyx-agents", "--open", &format!("session/{id}")]);
+}
+
+/// Past sessions live in Nyx Agents' History: all of them, or one agent's.
+fn open_history(harness: Option<&str>) {
+    let target = harness.map(|h| format!("history/{h}")).unwrap_or_else(|| "history".into());
+    spawn(&["nyx-agents", "--open", &target]);
 }
 
 /// What a click on a row or button asks for.
@@ -172,6 +154,7 @@ fn action(st: &mut State, a: &str, send: &(impl Fn(Data) + Send + Clone + 'stati
     let (verb, rest) = a.split_once(':').unwrap_or((a, ""));
     let pair = || rest.split_once(':').map(|(h, id)| (h.to_string(), id.to_string()));
     match verb {
+        "tab" if rest == "sessions" => open_history(None),
         "tab" => {
             st.tab = tab_named(rest);
             st.agent = None;
@@ -217,18 +200,7 @@ fn action(st: &mut State, a: &str, send: &(impl Fn(Data) + Send + Clone + 'stati
                 _ => Range::Today,
             }
         }
-        "sessions" => {
-            st.tab = Tab::Sessions;
-            st.agent = None;
-            st.filter = Some(rest.into());
-        }
-        "filter" => st.filter = (rest != "all").then(|| rest.to_string()),
-        "pick" => {
-            let key = pair();
-            st.picked = if st.picked == key { None } else { key };
-            st.armed = None;
-            st.peek = None;
-        }
+        "history" | "sessions" => open_history(Some(rest).filter(|h| !h.is_empty())),
         "past" => {
             if let Some((harness, id)) = pair() {
                 sources::call::<Session>(Call::ResumePast { harness, id }, send.clone(), |s| {
@@ -253,45 +225,6 @@ fn action(st: &mut State, a: &str, send: &(impl Fn(Data) + Send + Clone + 'stati
                     None
                 });
             }
-        }
-        "peek" => {
-            if let Some((harness, id)) = pair() {
-                let (h2, i2, s2) = (harness.clone(), id.clone(), send.clone());
-                std::thread::spawn(move || {
-                    let r = nyx_agents_client::Client::connect("nyx-ai-hub").and_then(|mut c| c.call::<Value>(Call::Peek { harness: h2.clone(), id: i2.clone() }));
-                    let text = r.map(|v| v["text"].as_str().unwrap_or("").to_string()).map_err(|e| e.to_string());
-                    s2(Data::Peek { harness: h2, id: i2, text });
-                });
-            }
-        }
-        "folder" => {
-            if let Some(p) = st.past(rest).filter(|p| !p.cwd.is_empty()) {
-                spawn(&["xdg-open", &p.cwd]);
-            }
-        }
-        "copy" => {
-            if let Some((_, id)) = pair() {
-                spawn(&["wl-copy", &id]);
-            }
-        }
-        "trash" => {
-            let key = pair();
-            if let Some((harness, id)) = key.clone().filter(|_| st.armed == key) {
-                st.armed = None;
-                st.picked = None;
-                st.history.retain(|p| !(p.harness == harness && p.id == id));
-                let s2 = send.clone();
-                sources::call::<Value>(Call::TrashPast { harness, id }, send.clone(), move |_| {
-                    sources::history(s2);
-                    None
-                });
-            } else {
-                st.armed = key;
-            }
-        }
-        "rescan" => {
-            sources::history(send.clone());
-            sources::call::<Vec<Usage>>(Call::ListUsage { refresh: false }, send.clone(), |v| Some(Data::Usage(v)));
         }
         "load" => sources::model(true, rest.into(), send.clone()),
         "unload" => sources::model(false, rest.into(), send.clone()),
@@ -432,17 +365,11 @@ fn main() {
                     last_local = Instant::now();
                     sources::local(send.clone());
                 }
-                EventKind::PopoverClose => {
-                    st.open = false;
-                    st.armed = None;
-                }
+                EventKind::PopoverClose => st.open = false,
                 EventKind::Action => {
                     if let Some(a) = e.control.as_deref() {
                         action(&mut st, a, &send);
                     }
-                }
-                EventKind::Submit if e.control.as_deref() == Some("query") => {
-                    st.query = e.value.as_ref().and_then(Value::as_str).unwrap_or("").trim().to_string();
                 }
                 EventKind::Click if e.button == Some(2) => {
                     action(&mut st, "refresh", &send);
