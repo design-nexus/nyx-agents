@@ -64,8 +64,7 @@ impl WorkspaceBackend for SwayWorkspaces {
     fn create(&self, id: &str, name: &str, o: Options) -> Result<Arc<dyn Desktop>, String> {
         use std::io::BufRead;
         use std::os::unix::process::CommandExt;
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let mut cmd = std::process::Command::new(exe);
+        let mut cmd = crate::self_command();
         cmd.arg("ws-hold")
             .args(["--id", id, "--name", name])
             .args(["--width", &o.width.to_string(), "--height", &o.height.to_string(), "--scale", &o.scale.to_string()])

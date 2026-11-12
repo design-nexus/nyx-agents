@@ -64,11 +64,13 @@ if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/nu
   systemctl --user daemon-reload
   if [[ -z ${NYX_AGENTS_NO_ENABLE:-} ]]; then
     systemctl --user enable --now nyx-agentd.socket
-    # A running manager picks up the new build; agents keep running.
-    if systemctl --user is-active -q nyx-agentd.service; then
-      systemctl --user restart nyx-agentd.service
-    fi
   fi
+  # A running manager picks up the new build; agents keep running.
+  if systemctl --user is-active -q nyx-agentd.service; then
+    systemctl --user restart nyx-agentd.service
+  fi
+else
+  say "Could not reach your systemd user session; the manager restarts on its own within a few seconds"
 fi
 if ! command -v sway >/dev/null; then
   say "Agent workspaces need sway (headless, never on your screen): sudo pacman -S sway"

@@ -57,6 +57,7 @@ struct Shared {
     pid: u32,
     id: String,
     log: PathBuf,
+    sock_inode: Option<u64>,
 }
 
 static NEXT_CLIENT: AtomicU64 = AtomicU64::new(1);
@@ -141,6 +142,7 @@ pub fn run(args: &[String]) -> i32 {
         pid,
         id: id.clone(),
         log,
+        sock_inode: inode(&sock),
     });
 
     let reader = pty.try_clone_master().expect("master");
@@ -318,8 +320,16 @@ fn wait_loop(s: Arc<Shared>, mut pty: Pty, sock: PathBuf) {
     crate::log_to(&s.log, &format!("exited code {code:?} signal {signal:?}"));
     // Give attached clients a moment to read the end, then go.
     std::thread::sleep(Duration::from_secs(2));
-    let _ = std::fs::remove_file(&sock);
+    // A resumed run may have bound a new socket at this path meanwhile.
+    if inode(&sock) == s.sock_inode {
+        let _ = std::fs::remove_file(&sock);
+    }
     std::process::exit(0);
+}
+
+fn inode(path: &std::path::Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::symlink_metadata(path).ok().map(|m| m.ino())
 }
 
 fn parse_rgb(s: &Option<String>) -> Option<Rgb> {

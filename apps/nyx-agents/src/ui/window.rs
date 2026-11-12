@@ -896,7 +896,8 @@ fn split(id: &str, down: bool) {
         move |r| match r {
             Ok(s) => {
                 let Some(ui) = cur() else { return };
-                ui.sessions.borrow_mut().insert(s.id.clone(), s.clone());
+                // The reply was built before the program started; events may be newer.
+                let s = ui.sessions.borrow_mut().entry(s.id.clone()).or_insert(s).clone();
                 if let Some(p) = ui.pages.borrow().iter().find(|p| p.borrow().id == id) {
                     p.borrow_mut().set_split(Some((&s, down)), &ui.actions);
                 }
@@ -1087,7 +1088,8 @@ fn launch(harness: &str) {
         |r| match r {
             Ok(s) => {
                 let Some(ui) = cur() else { return };
-                ui.sessions.borrow_mut().insert(s.id.clone(), s.clone());
+                // The reply was built before the program started; events may be newer.
+                ui.sessions.borrow_mut().entry(s.id.clone()).or_insert_with(|| s.clone());
                 open_session(&s.id);
                 refresh_sidebar();
             }

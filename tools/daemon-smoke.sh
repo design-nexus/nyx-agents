@@ -30,7 +30,7 @@ cleanup() {
   rm -rf "$scratch"
 }
 trap cleanup EXIT
-start() { "$bin/nyx-agentd" serve & daemon=$!; for _ in $(seq 50); do [[ -S $NYX_AGENTS_RUNTIME_DIR/agents.sock ]] && break; sleep 0.1; done; }
+start() { "${1:-$bin/nyx-agentd}" serve & daemon=$!; for _ in $(seq 50); do [[ -S $NYX_AGENTS_RUNTIME_DIR/agents.sock ]] && break; sleep 0.1; done; }
 cli() { "$bin/nyx-agents" "$@"; }
 check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
 fail=0
@@ -85,4 +85,23 @@ cli forget "$id"
 check "forgotten" '! cli status "$id" >/dev/null 2>&1'
 sleep 2.5
 check "no holders left" '! pgrep -f "nyx-agentd hold --id $id" >/dev/null'
+
+# An install replaces the manager's binary while it runs; it still starts sessions.
+kill "$daemon"; wait "$daemon" 2>/dev/null || true; daemon=
+rm -f "$NYX_AGENTS_RUNTIME_DIR/agents.sock"
+cp "$bin/nyx-agentd" "$scratch/nyx-agentd"
+start "$scratch/nyx-agentd"
+rm "$scratch/nyx-agentd"
+id=$(cli launch fake --cwd "$here" --title replaced)
+sleep 0.5
+check "starts after its binary is replaced" '[[ $(cli status "$id" --json | jq -r .lifecycle) == running ]]'
+
+# A holder that dies leaves a session nothing runs; stop and forget still work.
+pkill -KILL -f "nyx-agentd hold --id $id" -U "$(id -u)" || true
+sleep 0.5
+check "dead holder is lost" '[[ $(cli status "$id" --json | jq -r .lifecycle) == lost ]]'
+check "stop ends a lost session" 'cli stop "$id" >/dev/null'
+check "stop twice is fine" 'cli stop "$id" >/dev/null'
+cli forget "$id"
+check "lost session forgotten" '! cli status "$id" >/dev/null 2>&1'
 exit $fail

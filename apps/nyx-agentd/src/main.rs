@@ -38,6 +38,20 @@ fn main() {
     std::process::exit(code);
 }
 
+/// A command running this program, for starting holders. `/proc/self/exe`
+/// still runs after an install replaces the file; the path `current_exe`
+/// gives then does not. The installed path stays the command's name, so
+/// `ps` and `pgrep` still know a holder.
+pub fn self_command() -> std::process::Command {
+    use std::os::unix::process::CommandExt;
+    let path = std::env::current_exe().unwrap_or_else(|_| "nyx-agentd".into());
+    let name = path.to_string_lossy().trim_end_matches(" (deleted)").to_string();
+    let proc = std::path::Path::new("/proc/self/exe");
+    let mut cmd = std::process::Command::new(if proc.exists() { proc } else { path.as_path() });
+    cmd.arg0(name);
+    cmd
+}
+
 /// Append a line to a log file, keeping it under 1 MB.
 pub fn log_to(path: &std::path::Path, line: &str) {
     use std::io::Write;

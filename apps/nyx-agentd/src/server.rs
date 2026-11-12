@@ -7,7 +7,7 @@ use std::os::fd::FromRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -29,6 +29,11 @@ pub struct Daemon {
     before: Mutex<HashMap<String, std::collections::HashSet<String>>>,
     /// Sessions the user asked to stop (their exit is not news).
     stopping: Mutex<Vec<String>>,
+    /// Sessions asked to stop before their program started: the signal
+    /// (forced or not) to send once it has a pid.
+    stop_on_start: Mutex<HashMap<String, bool>>,
+    /// Requests being answered, so a replaced manager exits between them.
+    busy: std::sync::atomic::AtomicUsize,
     notifier: Mutex<Option<Arc<crate::notify::Notifier>>>,
     subscribers: Mutex<Vec<Writer>>,
     harnesses: Mutex<Vec<Harness>>,
@@ -173,6 +178,7 @@ pub fn run() -> i32 {
         eprintln!("nyx-agentd: cannot create {}", runtime.display());
         return 1;
     }
+    let activated = std::env::var("LISTEN_PID").ok().and_then(|p| p.parse::<u32>().ok()) == Some(std::process::id());
     let listener = match listener() {
         Ok(Some(l)) => l,
         Ok(None) => return 0,
@@ -187,6 +193,8 @@ pub fn run() -> i32 {
         viewing: Mutex::new(None),
         before: Mutex::new(HashMap::new()),
         stopping: Mutex::new(Vec::new()),
+        stop_on_start: Mutex::new(HashMap::new()),
+        busy: Default::default(),
         notifier: Mutex::new(None),
         subscribers: Mutex::new(Vec::new()),
         harnesses: Mutex::new(Vec::new()),
@@ -236,6 +244,10 @@ pub fn run() -> i32 {
         let d = d.clone();
         std::thread::spawn(move || watch_usage(d));
     }
+    if activated && let Ok(exe) = std::env::current_exe() {
+        let d = d.clone();
+        std::thread::spawn(move || watch_binary(d, exe));
+    }
 
     // Kept for the process lifetime; dropping it would release the name.
     let _bus = if std::env::var_os("NYX_AGENTS_NO_DBUS").is_some() { None } else { crate::control::serve(d.clone()) };
@@ -284,8 +296,12 @@ fn client(d: Arc<Daemon>, stream: UnixStream) {
             Ok(req) => {
                 let id = req.id;
                 let subscribe = matches!(req.call, Call::Subscribe);
+                d.busy.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 let r = handle(&d, req.call);
+                d.busy.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 if subscribe {
+                    // A subscriber that stops reading must not stall every event.
+                    let _ = writer.lock().unwrap().set_write_timeout(Some(Duration::from_secs(2)));
                     d.subscribers.lock().unwrap().push(writer.clone());
                 }
                 match r {
@@ -331,19 +347,34 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
         Call::Resume { id } => serde_json::to_value(resume(d, &id)?).unwrap(),
         Call::Stop { id, force } => {
             let s = get(&id)?;
-            let pid = s
-                .pid
-                .filter(|_| s.lifecycle == Lifecycle::Running)
-                .ok_or_else(|| err("not-running", "session is not running"))?;
-            d.stopping.lock().unwrap().push(id.clone());
             // The agent leads its own process group on its pty.
             let sig = if force { libc::SIGKILL } else { libc::SIGHUP };
-            unsafe { libc::kill(-(pid as i32), sig) };
-            json!({ "signalled": pid })
+            match (s.lifecycle, s.pid) {
+                (Lifecycle::Exited, _) => json!({ "ended": true }),
+                (Lifecycle::Running, Some(pid)) if holder_alive(&id) => {
+                    d.stopping.lock().unwrap().push(id.clone());
+                    unsafe { libc::kill(-(pid as i32), sig) };
+                    json!({ "signalled": pid })
+                }
+                (Lifecycle::Starting, _) if holder_alive(&id) => {
+                    d.stopping.lock().unwrap().push(id.clone());
+                    d.stop_on_start.lock().unwrap().insert(id.clone(), force);
+                    json!({ "pending": true })
+                }
+                // Nothing reachable runs it: a start that failed, or a holder
+                // that went away. End the record; signal a leftover agent.
+                (_, pid) => {
+                    if let Some(pid) = pid.filter(|p| leads_session(*p)) {
+                        unsafe { libc::kill(-(pid as i32), sig) };
+                    }
+                    end_unreachable(d, &id);
+                    json!({ "ended": true })
+                }
+            }
         }
         Call::Forget { id } => {
             let s = get(&id)?;
-            if matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting) {
+            if running(&s) {
                 return Err(err("running", "stop the session first"));
             }
             store::remove(&id).map_err(|e| err("io", &e.to_string()))?;
@@ -358,7 +389,7 @@ pub fn handle(d: &Arc<Daemon>, call: Call) -> Result<Value, RpcError> {
         }
         Call::RemoveWorktree { id } => {
             let s = get(&id)?;
-            if matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting) {
+            if running(&s) {
                 return Err(err("running", "stop the session first"));
             }
             let wt =
@@ -660,6 +691,12 @@ fn resume(d: &Arc<Daemon>, id: &str) -> Result<Session, RpcError> {
     if let Some(w) = s.workspace.as_deref().filter(|w| d.workspaces.exists(w)) {
         with_workspace_tools(&h.id, w, &mut plan.argv);
     }
+    // The last run's holder stays a moment after its program exits; the new
+    // one must not be mistaken for it.
+    let start = Instant::now();
+    while holder_alive(id) && start.elapsed() < Duration::from_secs(3) {
+        std::thread::sleep(Duration::from_millis(50));
+    }
     let s = d
         .update(id, |s| {
             s.lifecycle = Lifecycle::Starting;
@@ -680,9 +717,62 @@ fn with_workspace_tools(harness: &str, workspace: &str, argv: &mut Vec<String>) 
     argv.splice(1..1, extra);
 }
 
+/// Whether the session's holder answers on its socket.
+fn holder_alive(id: &str) -> bool {
+    UnixStream::connect(paths::session_socket(id)).is_ok()
+}
+
+/// Whether a program is running for this session. An exited one's holder
+/// lingers for a moment; that doesn't count.
+fn running(s: &Session) -> bool {
+    !matches!(s.lifecycle, Lifecycle::Exited) && holder_alive(&s.id)
+}
+
+/// Whether `pid` still leads its own session, as an agent on its pty does
+/// (so a reused pid isn't signalled).
+fn leads_session(pid: u32) -> bool {
+    pid > 1 && unsafe { libc::getsid(pid as i32) } == pid as i32
+}
+
+/// End a session that nothing reachable runs: a start that failed, or a
+/// holder that went away.
+fn end_unreachable(d: &Arc<Daemon>, id: &str) {
+    let resumable = d.sessions.lock().unwrap().get(id).cloned().map(|s| d.resumable(&s)).unwrap_or(false);
+    d.stop_on_start.lock().unwrap().remove(id);
+    d.stopping.lock().unwrap().retain(|s| s != id);
+    d.update(id, |s| {
+        s.lifecycle = if s.lifecycle == Lifecycle::Starting { Lifecycle::Exited } else { Lifecycle::Lost };
+        s.status.activity = Activity::Unknown;
+        s.ended.get_or_insert(now_ms());
+        s.resumable = resumable;
+    });
+}
+
+/// Exit when an install replaces this binary, between requests: the socket
+/// unit starts the new build on the next connection, and holders keep running.
+fn watch_binary(d: Arc<Daemon>, exe: PathBuf) {
+    loop {
+        std::thread::sleep(Duration::from_secs(5));
+        let replaced = std::fs::read_link("/proc/self/exe").is_ok_and(|l| l.to_string_lossy().ends_with(" (deleted)"));
+        if replaced && exe.is_file() && d.busy.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+            d.log("binary replaced; exiting so the socket starts the new one");
+            std::process::exit(0);
+        }
+    }
+}
+
+/// Start the session's holder; a start that fails ends the session.
 fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), RpcError> {
-    let exe = std::env::current_exe().map_err(|e| err("io", &e.to_string()))?;
-    let mut cmd = Command::new(exe);
+    let r = spawn_holder(d, s, argv);
+    if let Err(e) = &r {
+        d.log(&format!("start {}: {}", s.id, e.message));
+        end_unreachable(d, &s.id);
+    }
+    r
+}
+
+fn spawn_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), RpcError> {
+    let mut cmd = crate::self_command();
     if let Some(w) = &s.workspace {
         let (env, remove) = crate::workspaces::session_env(d, w);
         cmd.envs(env);
@@ -704,23 +794,26 @@ fn start_holder(d: &Arc<Daemon>, s: &Session, argv: &[String]) -> Result<(), Rpc
             Ok(())
         });
     }
-    let mut child = cmd.spawn().map_err(|e| err("spawn", &e.to_string()))?;
+    let mut child = cmd.spawn().map_err(|e| err("spawn", &format!("could not start the session holder: {e}")))?;
     d.log(&format!("holder for {} pid {}", s.id, child.id()));
+    let sock = paths::session_socket(&s.id);
+    let start = Instant::now();
+    let ready = loop {
+        if UnixStream::connect(&sock).is_ok() {
+            break Ok(());
+        }
+        if matches!(child.try_wait(), Ok(Some(_))) {
+            break Err(err("spawn", "the program did not start; see holder.log"));
+        }
+        if start.elapsed() > Duration::from_secs(5) {
+            break Err(err("spawn", "the session did not start in time; see holder.log"));
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
     std::thread::spawn(move || {
         let _ = child.wait();
     });
-    let sock = paths::session_socket(&s.id);
-    let start = Instant::now();
-    while UnixStream::connect(&sock).is_err() {
-        if start.elapsed() > Duration::from_secs(5) {
-            d.update(&s.id, |s| {
-                s.lifecycle = Lifecycle::Exited;
-                s.ended = Some(now_ms());
-            });
-            return Err(err("spawn", "the session did not start; see holder.log"));
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    ready?;
     let d2 = d.clone();
     let id = s.id.clone();
     std::thread::spawn(move || monitor(d2, id));
@@ -853,8 +946,13 @@ fn monitor(d: Arc<Daemon>, id: String) {
         for line in lines {
             let Ok(ev) = serde_json::from_str::<HolderEvent>(&line?) else { continue };
             let exited = matches!(ev, HolderEvent::Exited { .. });
-            let resumable = d.sessions.lock().unwrap().get(&id).map(|s| d.resumable(s)).unwrap_or(false);
             let before = d.sessions.lock().unwrap().get(&id).cloned();
+            let resumable = exited && before.as_ref().is_some_and(|s| d.resumable(s));
+            if let HolderEvent::Started { pid } = &ev
+                && let Some(force) = d.stop_on_start.lock().unwrap().remove(&id)
+            {
+                unsafe { libc::kill(-(*pid as i32), if force { libc::SIGKILL } else { libc::SIGHUP }) };
+            }
             let after = d.update(&id, |s| match ev {
                 HolderEvent::Started { pid } => {
                     s.pid = Some(pid);
@@ -887,7 +985,9 @@ fn monitor(d: Arc<Daemon>, id: String) {
     })()
     .unwrap_or(false);
     if !ended_cleanly {
-        let resumable = d.sessions.lock().unwrap().get(&id).map(|s| d.resumable(s)).unwrap_or(false);
+        d.stop_on_start.lock().unwrap().remove(&id);
+        let cur = d.sessions.lock().unwrap().get(&id).cloned();
+        let resumable = cur.is_some_and(|s| d.resumable(&s));
         d.update(&id, |s| {
             if matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting) {
                 s.lifecycle = Lifecycle::Lost;
