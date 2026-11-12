@@ -101,6 +101,8 @@ mod imp {
         pub(super) in_key: Cell<bool>,
         pub(super) committed: RefCell<Option<String>>,
         pub(super) blink_on: Cell<bool>,
+        /// Where the cursor was when assistive technology last heard of it.
+        pub(super) told_caret: Cell<Option<(u16, u16)>>,
     }
 
     #[glib::object_subclass]
@@ -108,6 +110,7 @@ mod imp {
         const NAME: &'static str = "NyxTerminalView";
         type Type = super::TerminalView;
         type ParentType = gtk::Widget;
+        type Interfaces = (gtk::AccessibleText,);
 
         fn class_init(klass: &mut Self::Class) {
             klass.set_css_name("nyx-terminal");
@@ -123,6 +126,45 @@ mod imp {
             obj.set_hexpand(true);
             obj.set_vexpand(true);
             self.blink_on.set(true);
+        }
+    }
+
+    // The screen as text for screen readers: its rows, one per line, the caret at the
+    // cursor. Only the caret's moves are announced, not each redraw.
+    impl AccessibleTextImpl for TerminalView {
+        fn contents(&self, start: u32, end: u32) -> Option<glib::Bytes> {
+            let text: String = self.obj().screen_text().chars().skip(start as usize).take(end.saturating_sub(start) as usize).collect();
+            Some(glib::Bytes::from_owned(text.into_bytes()))
+        }
+
+        fn contents_at(&self, offset: u32, granularity: gtk::AccessibleTextGranularity) -> Option<(u32, u32, glib::Bytes)> {
+            let chars: Vec<char> = self.obj().screen_text().chars().collect();
+            let at = (offset as usize).min(chars.len());
+            let (a, b) = if granularity == gtk::AccessibleTextGranularity::Character {
+                (at, (at + 1).min(chars.len()))
+            } else {
+                let a = chars[..at].iter().rposition(|&c| c == '\n').map_or(0, |i| i + 1);
+                let b = chars[at..].iter().position(|&c| c == '\n').map_or(chars.len(), |i| at + i);
+                (a, b)
+            };
+            let text: String = chars[a..b].iter().collect();
+            Some((a as u32, b as u32, glib::Bytes::from_owned(text.into_bytes())))
+        }
+
+        fn caret_position(&self) -> u32 {
+            self.obj().caret_offset()
+        }
+
+        fn selection(&self) -> Vec<gtk::AccessibleTextRange> {
+            Vec::new()
+        }
+
+        fn attributes(&self, _offset: u32) -> Vec<(gtk::AccessibleTextRange, glib::GString, glib::GString)> {
+            Vec::new()
+        }
+
+        fn default_attributes(&self) -> Vec<(glib::GString, glib::GString)> {
+            Vec::new()
         }
     }
 
@@ -154,7 +196,7 @@ mod imp {
 glib::wrapper! {
     pub struct TerminalView(ObjectSubclass<imp::TerminalView>)
         @extends gtk::Widget,
-        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+        @implements gtk::Accessible, gtk::AccessibleText, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl TerminalView {
@@ -194,6 +236,22 @@ impl TerminalView {
 
     fn with_state<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
         f(self.imp().state.borrow_mut().as_mut().expect("state"))
+    }
+
+    /// The viewport's text, a line per row, trailing blanks dropped.
+    fn screen_text(&self) -> String {
+        let st = self.imp().state.borrow();
+        let Some(s) = st.as_ref() else { return String::new() };
+        (0..s.term.rows()).map(|r| s.term.row_text(r).trim_end().to_string()).collect::<Vec<_>>().join("\n")
+    }
+
+    /// The cursor as an offset into [`Self::screen_text`].
+    fn caret_offset(&self) -> u32 {
+        let st = self.imp().state.borrow();
+        let Some(s) = st.as_ref() else { return 0 };
+        let Some((col, row)) = s.renderer.frame.cursor.at else { return 0 };
+        let before: usize = (0..row).map(|r| s.term.row_text(r).trim_end().chars().count() + 1).sum();
+        (before + (col as usize).min(s.term.row_text(row).trim_end().chars().count())) as u32
     }
 
     pub fn is_read_only(&self) -> bool {
@@ -470,6 +528,15 @@ impl TerminalView {
             }
         }
         let m = s.metrics.clone().unwrap();
+        let caret = s.renderer.frame.cursor.at;
+        if self.imp().told_caret.replace(caret) != caret {
+            let view = self.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(v) = view.upgrade() {
+                    v.update_caret_position();
+                }
+            });
+        }
         let frame = &s.renderer.frame;
         let bg = frame.background;
         snap.append_color(&rgba(bg, 1.0), &rect(0.0, 0.0, w, h));
