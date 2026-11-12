@@ -31,13 +31,73 @@ pub struct Pane {
     shown_lifecycle: Option<Lifecycle>,
 }
 
+/// Under the title: the agent, branch, folder and what it says, each with its icon.
+struct Meta {
+    root: gtk::Box,
+    agent: gtk::Label,
+    branch_row: gtk::Box,
+    branch: gtk::Label,
+    folder: gtk::Label,
+    msg_row: gtk::Box,
+    msg: gtk::Label,
+}
+
+impl Meta {
+    fn new() -> Meta {
+        let root = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        root.add_css_class("session-meta");
+        root.set_hexpand(true);
+        let sep = || {
+            let l = gtk::Label::new(Some("·"));
+            l.add_css_class("meta-sep");
+            l
+        };
+        let piece = |icon: Option<&str>| {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+            if let Some(i) = icon {
+                let img = gtk::Image::from_icon_name(i);
+                img.add_css_class("meta-icon");
+                row.append(&img);
+            }
+            let l = gtk::Label::new(None);
+            l.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+            row.append(&l);
+            (row, l)
+        };
+        let (agent_row, agent) = piece(None);
+        let (branch_row, branch) = piece(Some("nyx-agents-branch-symbolic"));
+        let (folder_row, folder) = piece(Some("folder-symbolic"));
+        folder.set_max_width_chars(48);
+        let (msg_row, msg) = piece(None);
+        msg.add_css_class("meta-msg");
+        root.append(&agent_row);
+        let s1 = sep();
+        root.append(&s1);
+        root.append(&branch_row);
+        let s2 = sep();
+        root.append(&s2);
+        root.append(&folder_row);
+        let s3 = sep();
+        root.append(&s3);
+        root.append(&msg_row);
+        // A separator shows only before a piece that shows.
+        for (s, row) in [(&s1, &branch_row), (&s3, &msg_row)] {
+            let s = s.clone();
+            row.connect_visible_notify(move |r| s.set_visible(r.is_visible()));
+        }
+        Meta { root, agent, branch_row, branch, folder, msg_row, msg }
+    }
+}
+
 pub struct Page {
     pub id: String,
     pub root: gtk::Box,
     title: gtk::Label,
-    meta: gtk::Label,
-    pill: gtk::Label,
+    meta: Meta,
+    pill: gtk::Box,
+    pill_text: gtk::Label,
     stop: gtk::Button,
+    stop_label: gtk::Label,
     resume: gtk::Button,
     retry: gtk::Button,
     discard: gtk::Button,
@@ -84,6 +144,57 @@ pub struct Actions {
 
 fn button(icon: &str, tooltip: &str) -> gtk::Button {
     nyx_ui::widgets::bar_button(icon, tooltip)
+}
+
+/// A button with an icon before its label.
+pub fn icon_label_button(icon: &str, label: &str) -> (gtk::Button, gtk::Label) {
+    let b = gtk::Button::new();
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    row.append(&gtk::Image::from_icon_name(icon));
+    let l = gtk::Label::new(Some(label));
+    row.append(&l);
+    b.set_child(Some(&row));
+    b.add_css_class("icon-label");
+    (b, l)
+}
+
+/// An agent's mark: its letter on its colour, `size` pixels square.
+pub fn logo(harness: &str, size: i32) -> gtk::Label {
+    let letter = match harness {
+        "claude" => "C".to_string(),
+        "codex" => "X".to_string(),
+        "antigravity" => "A".to_string(),
+        "muse" => "M".to_string(),
+        "grok" => "G".to_string(),
+        "cursor" => "▲".to_string(),
+        "omp" => "π".to_string(),
+        "crush" => "C".to_string(),
+        "opencode" => "O".to_string(),
+        "hermes" => "H".to_string(),
+        "shell" => "›_".to_string(),
+        other => other.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default(),
+    };
+    let l = gtk::Label::new(Some(&letter));
+    l.add_css_class("agent-logo");
+    l.add_css_class(&format!("logo-{harness}"));
+    if size >= 24 {
+        l.add_css_class("large");
+    }
+    l.set_size_request(size, size);
+    l.set_halign(gtk::Align::Start);
+    l.set_valign(gtk::Align::Center);
+    l
+}
+
+/// "now", "4m", "2h", "3d": how long ago a time in milliseconds was.
+pub fn ago(ms: u64) -> String {
+    let secs = nyx_agents_proto::now_ms().saturating_sub(ms) / 1000;
+    match secs {
+        0..60 => "now".into(),
+        60..3600 => format!("{}m", secs / 60),
+        3600..86400 => format!("{}h", secs / 3600),
+        _ => format!("{}d", secs / 86400),
+    }
 }
 
 pub fn live(s: &Session) -> bool {
@@ -222,7 +333,11 @@ impl Pane {
             p.attached = Some(daemon::attach(&v, &s.id, AttachMode::Control, move |_| ended(&id)));
             Some(v)
         } else {
-            daemon::history_view(&s.id)
+            let v = daemon::history_view(&s.id);
+            if let Some(v) = &v {
+                v.add_css_class("history-view");
+            }
+            v
         };
         match &view {
             Some(v) => {
@@ -322,36 +437,43 @@ impl Page {
         let title = gtk::Label::new(None);
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         title.set_max_width_chars(40);
+        let title_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        title_row.append(&title);
+        let pencil = gtk::Image::from_icon_name("document-edit-symbolic");
+        pencil.add_css_class("title-pencil");
+        title_row.append(&pencil);
         let title_button = gtk::Button::new();
-        title_button.set_child(Some(&title));
+        title_button.set_child(Some(&title_row));
         title_button.add_css_class("flat");
         title_button.add_css_class("session-title");
         title_button.set_valign(gtk::Align::Center);
         title_button.set_tooltip_text(Some("Rename (F2)"));
-        let pill = gtk::Label::new(None);
+        let pill = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         pill.add_css_class("status-pill");
         pill.set_valign(gtk::Align::Center);
-        let meta = gtk::Label::new(None);
-        meta.add_css_class("session-meta");
-        meta.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
-        meta.set_hexpand(true);
-        meta.set_xalign(0.0);
-        let stop = gtk::Button::with_label("Stop");
+        let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        dot.add_css_class("pill-dot");
+        dot.set_valign(gtk::Align::Center);
+        let pill_text = gtk::Label::new(None);
+        pill.append(&dot);
+        pill.append(&pill_text);
+        let meta = Meta::new();
+        let (stop, stop_label) = icon_label_button("media-playback-stop-symbolic", "Stop");
         stop.add_css_class("stop-button");
-        let resume = gtk::Button::with_label("Resume");
+        let (resume, _) = icon_label_button("view-refresh-symbolic", "Resume");
         resume.add_css_class("suggested-action");
         resume.set_tooltip_text(Some("Continue this conversation in a new run of the agent"));
-        let retry = gtk::Button::with_label("Try again");
+        let (retry, _) = icon_label_button("view-refresh-symbolic", "Try again");
         retry.set_tooltip_text(Some("Start it again in the same folder"));
-        let discard = gtk::Button::with_label("Discard");
+        let (discard, _) = icon_label_button("user-trash-symbolic", "Discard");
         discard.set_tooltip_text(Some("Remove this session from Agents"));
-        let more = button("view-more-symbolic", "More");
+        let more = button("view-more-horizontal-symbolic", "More");
         for b in [&stop, &resume, &retry, &discard] {
             b.set_valign(gtk::Align::Center);
         }
         bar.append(&title_button);
         bar.append(&pill);
-        bar.append(&meta);
+        bar.append(&meta.root);
         bar.append(&resume);
         bar.append(&retry);
         bar.append(&stop);
@@ -420,7 +542,9 @@ impl Page {
             title,
             meta,
             pill,
+            pill_text,
             stop,
+            stop_label,
             resume,
             retry,
             discard,
@@ -502,7 +626,7 @@ impl Page {
     pub fn update(&self, s: &Session, a: &Rc<Actions>) {
         let stopping = (a.stopping)(&s.id);
         let (text, class) = status_text(s, stopping);
-        self.pill.set_text(text);
+        self.pill_text.set_text(text);
         for c in ["working", "blocked", "done", "failed"] {
             self.pill.remove_css_class(c);
         }
@@ -510,22 +634,19 @@ impl Page {
             self.pill.add_css_class(class);
         }
         self.title.set_text(&s.title);
-        let mut meta = vec![(a.agent_name)(&s.harness)];
-        if let Some(w) = &s.worktree
-            && let Some(b) = &w.branch
-        {
-            meta.push(if w.linked { format!("{b} (worktree)") } else { b.clone() });
-        }
-        meta.push(nyx_core::paths::pretty(std::path::Path::new(&s.cwd)));
-        if let Some(m) = &s.status.message {
-            meta.push(m.clone());
-        }
-        self.meta.set_text(&meta.join("  ·  "));
-        self.meta.set_tooltip_text(Some(&s.cwd));
+        self.meta.agent.set_text(&(a.agent_name)(&s.harness));
+        let branch = s.worktree.as_ref().and_then(|w| w.branch.as_ref().map(|b| if w.linked { format!("{b} (worktree)") } else { b.clone() }));
+        self.meta.branch_row.set_visible(branch.is_some());
+        self.meta.branch.set_text(branch.as_deref().unwrap_or_default());
+        self.meta.folder.set_text(&nyx_core::paths::pretty(std::path::Path::new(&s.cwd)));
+        self.meta.root.set_tooltip_text(Some(&s.cwd));
+        let msg = s.status.message.clone().filter(|_| live(s));
+        self.meta.msg_row.set_visible(msg.is_some());
+        self.meta.msg.set_text(msg.as_deref().unwrap_or_default());
         let live = live(s);
         let failed = failed_start(s);
         self.stop.set_visible(live);
-        self.stop.set_label(if stopping {
+        self.stop_label.set_label(if stopping {
             "Force stop"
         } else if s.harness == "shell" {
             "Close"
@@ -618,13 +739,25 @@ impl Page {
                         p2.set_position(total / 2);
                     }
                 });
-                // Closing the split: a small button on the second pane's banner row.
+                // The terminal's own header: what it is, where, and its ×.
+                let head = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                head.add_css_class("pane-head");
+                head.append(&gtk::Image::from_icon_name("utilities-terminal-symbolic"));
+                let name = gtk::Label::new(Some(if s.harness == "shell" { "Terminal" } else { &s.title }));
+                name.add_css_class("pane-title");
+                name.set_xalign(0.0);
+                name.set_hexpand(true);
+                head.append(&name);
+                let place = gtk::Label::new(Some(&nyx_core::paths::pretty(std::path::Path::new(&s.cwd))));
+                place.add_css_class("session-meta");
+                place.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+                head.append(&place);
                 let close = button("window-close-symbolic", "Close the terminal");
-                close.set_halign(gtk::Align::End);
                 let id = self.id.clone();
                 let act = a.unsplit.clone();
                 close.connect_clicked(move |_| act(&id));
-                other.borrow().root.prepend(&close);
+                head.append(&close);
+                other.borrow().root.prepend(&head);
                 self.split = Some((other, down));
             }
         }

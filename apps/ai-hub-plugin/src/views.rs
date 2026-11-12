@@ -241,9 +241,7 @@ pub fn popover(st: &State) -> Node {
             hbox([
                 sparkle(28),
                 fill(vbox([label("AI Hub").class("title"), dim(summary(st))])).expand(),
-                button("open-app", None, Some("list-add-symbolic")).tooltip("New session in Nyx Agents"),
-                button("history", None, Some("document-open-recent-symbolic")).tooltip("Past sessions, in Nyx Agents"),
-                button("open-app", Some("Agents"), Some("utilities-terminal-symbolic")),
+                button("open-app", Some("New"), Some("list-add-symbolic")).tooltip("New session in Nyx Agents"),
             ])
             .spacing(10),
         );
@@ -371,6 +369,14 @@ fn agents_tab(st: &State) -> Node {
     }
     out.push(separator());
     out.push(footer(st));
+    // Past sessions and the work itself live in Nyx Agents.
+    out.push(
+        hbox([
+            button("history", Some("History"), Some("document-open-recent-symbolic")).expand(),
+            button("open-app", Some("Open Agents"), Some("utilities-terminal-symbolic")).expand(),
+        ])
+        .spacing(6),
+    );
     fill(vbox(out))
 }
 

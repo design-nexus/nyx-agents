@@ -396,16 +396,30 @@ fn discard(id: &str) {
     desc.set_wrap(true);
     desc.set_xalign(0.0);
     card.append(&desc);
-    let check = gtk::CheckButton::with_label("Also remove its worktree");
+    let check = gtk::CheckButton::new();
     if let Some(root) = &worktree {
         check.set_active(true);
-        check.set_tooltip_text(Some(&format!("{} (only if it has no uncommitted changes; the branch is kept)", nyx_core::paths::pretty(std::path::Path::new(root)))));
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        let t = gtk::Label::new(Some("Also remove its worktree"));
+        t.set_xalign(0.0);
+        let d = gtk::Label::new(Some(&format!(
+            "{} · only if nothing in it is uncommitted · the branch is kept",
+            nyx_core::paths::pretty(std::path::Path::new(root))
+        )));
+        d.add_css_class("session-meta");
+        d.set_xalign(0.0);
+        d.set_wrap(true);
+        text.append(&t);
+        text.append(&d);
+        check.set_child(Some(&text));
+        check.add_css_class("discard-check");
         card.append(&check);
     }
     let buttons = nyx_ui::widgets::hbox(8);
     buttons.set_halign(gtk::Align::End);
     buttons.set_margin_top(6);
     let cancel = gtk::Button::with_label("Cancel");
+    cancel.add_css_class("flat");
     let ok = gtk::Button::with_label("Discard");
     ok.add_css_class("destructive-action");
     buttons.append(&cancel);
@@ -533,6 +547,7 @@ fn build(app: &gtk::Application) {
         Rc::new(toast),
     );
     stack.add_named(&history.root, Some("history"));
+    history.connect_loaded(refresh_sidebar);
 
     let tab_row = TabRow::new("New session (Ctrl+T)");
     tab_row.connect_select(select_tab);
@@ -730,6 +745,7 @@ fn on_msg(m: Msg) {
             fill_new_menu();
             if !ui.restored.replace(true) {
                 restore_tabs();
+                ui.history.load();
             }
             let all: Vec<Session> = ui.sessions.borrow().values().cloned().collect();
             for s in &all {
@@ -864,6 +880,60 @@ fn row_subtitle(s: &Session) -> String {
     bits.join(" · ")
 }
 
+/// A sidebar row's state mark: a dot while working, a ring while running, an icon otherwise.
+fn mark(s: &Session) -> gtk::Widget {
+    let slot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    slot.add_css_class("row-mark");
+    slot.set_size_request(16, 16);
+    slot.set_valign(gtk::Align::Start);
+    slot.set_margin_top(1);
+    let dot = |class: &str| {
+        let d = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        d.add_css_class("mark-dot");
+        d.add_css_class(class);
+        d.set_valign(gtk::Align::Center);
+        d.set_margin_start(4);
+        d.upcast::<gtk::Widget>()
+    };
+    let icon = |name: &str, class: &str| {
+        let i = gtk::Image::from_icon_name(name);
+        i.add_css_class("nav-icon");
+        if !class.is_empty() {
+            i.add_css_class(class);
+        }
+        i.upcast::<gtk::Widget>()
+    };
+    let w = match (s.lifecycle, s.status.activity) {
+        _ if page::failed_start(s) => icon("window-close-symbolic", "failed"),
+        (Lifecycle::Running, Activity::Blocked | Activity::Error) => icon("dialog-warning-symbolic", "blocked"),
+        (Lifecycle::Running, Activity::Done) => icon("object-select-symbolic", "done"),
+        (Lifecycle::Running | Lifecycle::Starting, Activity::Working) => dot("working"),
+        (Lifecycle::Running | Lifecycle::Starting, _) => dot("ring"),
+        _ if s.exit_code == Some(0) && s.harness != "shell" => icon("object-select-symbolic", "done"),
+        _ => icon("media-playback-stop-symbolic", ""),
+    };
+    slot.append(&w);
+    slot.upcast()
+}
+
+/// When the row's state began: its last status change while live, its end after.
+fn row_time(s: &Session) -> String {
+    let t = if live(s) { s.status.since.max(s.created) } else { s.ended.unwrap_or(s.created) };
+    page::ago(t)
+}
+
+/// A group heading in the sidebar, in sentence case.
+fn group_heading(text: &str, first: bool) -> gtk::Label {
+    let l = gtk::Label::new(Some(text));
+    l.add_css_class("agents-group");
+    l.add_css_class("compact-hide");
+    if first {
+        l.add_css_class("first");
+    }
+    l.set_xalign(0.0);
+    l
+}
+
 fn session_row(s: &Session, active: bool) -> gtk::Button {
     let b = gtk::Button::new();
     b.add_css_class("nav-item");
@@ -872,14 +942,7 @@ fn session_row(s: &Session, active: bool) -> gtk::Button {
         b.add_css_class("active");
     }
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    let (icon, kind) = status_icon(s);
-    let image = gtk::Image::from_icon_name(icon);
-    image.add_css_class("nav-icon");
-    if !kind.is_empty() {
-        image.add_css_class(kind);
-    }
-    image.set_valign(gtk::Align::Start);
-    content.append(&image);
+    content.append(&mark(s));
     let text = gtk::Box::new(gtk::Orientation::Vertical, 1);
     text.add_css_class("compact-hide");
     text.set_hexpand(true);
@@ -892,6 +955,11 @@ fn session_row(s: &Session, active: bool) -> gtk::Button {
     text.append(&title);
     text.append(&sub);
     content.append(&text);
+    let time = nyx_ui::widgets::label(&row_time(s), "session-time");
+    time.add_css_class("compact-hide");
+    time.set_valign(gtk::Align::Start);
+    time.set_margin_top(2);
+    content.append(&time);
     b.set_child(Some(&content));
     b.set_tooltip_text(Some(&format!("{}\n{}", s.title, nyx_core::paths::pretty(std::path::Path::new(&s.cwd)))));
     b.update_property(&[gtk::accessible::Property::Label(&s.title)]);
@@ -916,7 +984,7 @@ fn refresh_sidebar() {
         if items.is_empty() {
             return;
         }
-        sb.append(&nyx_ui::sidebar::group_label(title, *first));
+        sb.append(&group_heading(title, *first));
         *first = false;
         for s in items {
             let item = session_row(s, active_id.as_deref() == Some(s.id.as_str()));
@@ -960,6 +1028,7 @@ fn refresh_sidebar() {
     sb.append(&sep);
     let history = nyx_ui::sidebar::nav_item("document-open-recent-symbolic", "History", "Every agent's past sessions");
     history.set_active(ui.showing_history.get());
+    history.set_count(Some(ui.history.count() as u64));
     history.button.connect_clicked(|_| show_history(None));
     sb.append(&history.button);
     sb.refresh();
@@ -1352,7 +1421,7 @@ fn new_session_menu() -> NewMenu {
     cancel.add_css_class("flat");
     let foot = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     foot.set_margin_top(6);
-    let hint = gtk::Label::new(Some("Enter starts"));
+    let hint = gtk::Label::new(Some("Enter starts · remembered next time"));
     hint.add_css_class("session-meta");
     hint.set_hexpand(true);
     hint.set_xalign(0.0);
@@ -1367,7 +1436,14 @@ fn new_session_menu() -> NewMenu {
     content.append(&folders);
     content.append(&heading("Options"));
     content.append(&worktree_row);
+    let line = gtk::Separator::new(gtk::Orientation::Horizontal);
+    line.add_css_class("option-line");
+    content.append(&line);
     content.append(&desktop_row);
+    {
+        let line = line.clone();
+        desktop_row.connect_visible_notify(move |r| line.set_visible(r.is_visible()));
+    }
     content.append(&foot);
 
     let popover = gtk::Popover::new();
@@ -1388,9 +1464,15 @@ fn new_session_menu() -> NewMenu {
     });
     popover.add_controller(keys);
     let button = gtk::MenuButton::new();
-    button.set_icon_name("list-add-symbolic");
+    let face = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    face.append(&gtk::Image::from_icon_name("list-add-symbolic"));
+    face.append(&gtk::Label::new(Some("New")));
+    let key = gtk::Label::new(Some("Ctrl T"));
+    key.add_css_class("new-key");
+    face.append(&key);
+    button.set_child(Some(&face));
     button.set_tooltip_text(Some("New session (Ctrl+T)"));
-    button.add_css_class("bar-button");
+    button.add_css_class("new-button");
     button.set_valign(gtk::Align::Center);
     button.set_popover(Some(&popover));
     let b = button.clone();
@@ -1417,10 +1499,13 @@ fn start_page() -> (gtk::Box, StartPage) {
     root.set_valign(gtk::Align::Center);
     root.set_halign(gtk::Align::Center);
     root.set_vexpand(true);
+    let head = gtk::Box::new(gtk::Orientation::Vertical, 6);
     let title = gtk::Label::new(Some("Start a session"));
-    title.add_css_class("empty-title");
-    let desc = gtk::Label::new(Some("Pick an agent. It starts in this folder and opens here."));
-    desc.add_css_class("dim");
+    title.add_css_class("start-title");
+    let desc = gtk::Label::new(Some("Pick an agent. It starts in the folder below and opens here."));
+    desc.add_css_class("session-meta");
+    head.append(&title);
+    head.append(&desc);
     let folder_label = gtk::Label::new(Some("~"));
     folder_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
     folder_label.set_max_width_chars(48);
@@ -1429,24 +1514,33 @@ fn start_page() -> (gtk::Box, StartPage) {
     fb.append(&folder_label);
     fb.append(&gtk::Image::from_icon_name("pan-down-symbolic"));
     let folder = gtk::Button::new();
-    folder.add_css_class("new-session-folder");
+    folder.add_css_class("folder-pick");
     folder.set_child(Some(&fb));
-    folder.set_halign(gtk::Align::Center);
     folder.set_tooltip_text(Some("Choose the folder"));
     folder.connect_clicked(|_| choose_folder(false));
+    let where_ = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    where_.set_halign(gtk::Align::Center);
+    let in_ = gtk::Label::new(Some("In"));
+    in_.add_css_class("session-meta");
+    where_.append(&in_);
+    where_.append(&folder);
     let tiles = gtk::FlowBox::new();
     tiles.set_selection_mode(gtk::SelectionMode::None);
     tiles.set_max_children_per_line(4);
-    tiles.set_min_children_per_line(2);
+    tiles.set_min_children_per_line(4);
     tiles.set_homogeneous(true);
     tiles.set_row_spacing(10);
     tiles.set_column_spacing(10);
     tiles.set_halign(gtk::Align::Center);
-    let keys = gtk::Label::new(Some("Ctrl+T: New session with options  ·  Ctrl+Shift+F: Find a session"));
-    keys.add_css_class("session-meta");
-    root.append(&title);
-    root.append(&desc);
-    root.append(&folder);
+    let keys = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    keys.add_css_class("start-keys");
+    keys.set_halign(gtk::Align::Center);
+    keys.append(&nyx_ui::widgets::key_caps(&["Ctrl", "T"]));
+    keys.append(&gtk::Label::new(Some("New session with options  ·")));
+    keys.append(&nyx_ui::widgets::key_caps(&["Ctrl", "Shift", "F"]));
+    keys.append(&gtk::Label::new(Some("Find a session")));
+    root.append(&head);
+    root.append(&where_);
     root.append(&tiles);
     root.append(&keys);
     (root, StartPage { tiles, folder_label })
@@ -1497,7 +1591,8 @@ fn fill_new_menu() {
     }
     for h in &list {
         let name = if h.id == "shell" { "Terminal".to_string() } else { h.name.clone() };
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 9);
+        row.append(&page::logo(&h.id, 20));
         let n = gtk::Label::new(Some(&name));
         n.set_xalign(0.0);
         n.set_hexpand(true);
@@ -1522,7 +1617,11 @@ fn fill_new_menu() {
         });
         ui.new.agents.insert(&b, -1);
 
-        let tile = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let tile = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        let mark = page::logo(&h.id, 26);
+        mark.set_vexpand(true);
+        mark.set_valign(gtk::Align::Start);
+        tile.append(&mark);
         let t = gtk::Label::new(Some(&name));
         t.add_css_class("start-tile-name");
         t.set_xalign(0.0);

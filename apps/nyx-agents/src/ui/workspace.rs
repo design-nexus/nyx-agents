@@ -22,6 +22,8 @@ const FRAME_GAP: Duration = Duration::from_millis(66);
 
 thread_local! {
     static OPEN: RefCell<HashMap<String, gtk::Window>> = RefCell::new(HashMap::new());
+    /// Panes' labels for the window in front on their workspace.
+    static FOCUSED: RefCell<Vec<(String, glib::WeakRef<gtk::Label>)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Show workspace `id` (a unique prefix will do), or say why not.
@@ -104,6 +106,15 @@ pub fn pull_clipboard(id: &str, done: impl FnOnce(Result<(), String>) + 'static)
 
 /// Keep an open view's title current.
 pub fn changed(w: &AgentWorkspace) {
+    FOCUSED.with(|f| {
+        f.borrow_mut().retain(|(id, l)| {
+            let Some(l) = l.upgrade() else { return false };
+            if *id == w.id {
+                l.set_text(w.focused.as_deref().unwrap_or_default());
+            }
+            true
+        })
+    });
     if let Some(win) = OPEN.with(|o| o.borrow().get(&w.id).cloned()) {
         let focused = w.focused.as_deref().map(|f| format!(" · {f}")).unwrap_or_default();
         win.set_title(Some(&format!("{}{focused} · Agent workspace", w.name)));
@@ -194,6 +205,11 @@ pub fn pane(id: &str, on_window: impl Fn() + 'static, on_hide: impl Fn() + 'stat
     title.set_xalign(0.0);
     title.set_hexpand(true);
     head.append(&title);
+    let focused = gtk::Label::new(None);
+    focused.add_css_class("session-meta");
+    focused.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    focused.set_max_width_chars(24);
+    head.append(&focused);
     let controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     head.append(&controls);
     let open = nyx_ui::widgets::bar_button("window-new-symbolic", "Open the desktop in a window");
@@ -207,13 +223,20 @@ pub fn pane(id: &str, on_window: impl Fn() + 'static, on_hide: impl Fn() + 'stat
         hide.connect_clicked(move |_| on_hide());
     }
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    body.add_css_class("desktop-screen");
     body.set_vexpand(true);
+    body.set_overflow(gtk::Overflow::Hidden);
     let status = gtk::Label::new(Some("Connecting…"));
     status.add_css_class("session-meta");
     status.set_vexpand(true);
     body.append(&status);
+    let note = gtk::Label::new(Some("The agent is driving. Take over sends your pointer and keys in; it can still act too."));
+    note.add_css_class("desktop-note");
+    note.set_xalign(0.0);
+    note.set_wrap(true);
     root.append(&head);
     root.append(&body);
+    root.append(&note);
 
     let stop: Rc<RefCell<Option<Arc<AtomicBool>>>> = Rc::new(RefCell::new(None));
     let prefix = id.to_string();
@@ -223,15 +246,33 @@ pub fn pane(id: &str, on_window: impl Fn() + 'static, on_hide: impl Fn() + 'stat
         move |r| {
             let (Some(body), Some(controls)) = (slot.upgrade(), controls2.upgrade()) else { return };
             let found = r.ok().and_then(|l| l.into_iter().find(|w| w.id.starts_with(&prefix)));
-            let Some(v) = found.as_ref().and_then(|w| build_view(w, on_hide.clone())) else {
+            let Some(w) = found else {
                 status.set_text("This desktop has ended.");
                 return;
             };
+            let Some(v) = build_view(&w, on_hide.clone()) else {
+                status.set_text("This desktop has ended.");
+                return;
+            };
+            focused.set_text(w.focused.as_deref().unwrap_or_default());
+            FOCUSED.with(|f| f.borrow_mut().push((w.id.clone(), focused.downgrade())));
             body.remove(&status);
             v.body.set_vexpand(true);
             body.append(&v.body);
-            v.driving.set_text("You're driving");
-            controls.append(&v.driving);
+            // In a pane, a labelled switch; the note under the picture says who drives.
+            let label = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            label.append(&gtk::Image::from_icon_name("input-mouse-symbolic"));
+            label.append(&gtk::Label::new(Some("Take over")));
+            v.take.set_child(Some(&label));
+            v.take.remove_css_class("bar-button");
+            v.take.add_css_class("take-over");
+            v.take.connect_toggled(move |b| {
+                note.set_text(if b.is_active() {
+                    "You're driving: your pointer and keys go to the desktop. The agent can still act too."
+                } else {
+                    "The agent is driving. Take over sends your pointer and keys in; it can still act too."
+                });
+            });
             controls.append(&v.take);
             *stop2.borrow_mut() = Some(v.stop);
         },

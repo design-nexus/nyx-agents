@@ -27,6 +27,7 @@ pub struct History {
     show: Rc<dyn Fn(Session)>,
     show_id: Rc<dyn Fn(&str)>,
     toast: Rc<dyn Fn(&str)>,
+    on_load: RefCell<Option<Rc<dyn Fn()>>>,
 }
 
 impl History {
@@ -54,13 +55,14 @@ impl History {
             .child(&chips)
             .build();
         chip_scroll.set_margin_start(8);
+        chip_scroll.set_valign(gtk::Align::Center);
+        chips.set_valign(gtk::Align::Center);
         bar.append(&chip_scroll);
         let search = gtk::SearchEntry::new();
+        search.set_valign(gtk::Align::Center);
         search.set_placeholder_text(Some("Search titles and folders"));
         search.set_width_chars(26);
         bar.append(&search);
-        let refresh = nyx_ui::widgets::bar_button("view-refresh-symbolic", "Look again");
-        bar.append(&refresh);
         root.append(&bar);
         let content = gtk::Box::new(gtk::Orientation::Vertical, 2);
         content.add_css_class("history-list");
@@ -79,17 +81,12 @@ impl History {
             show,
             show_id,
             toast,
+            on_load: RefCell::new(None),
         });
         let weak = Rc::downgrade(&me);
         me.search.connect_search_changed(move |_| {
             if let Some(h) = weak.upgrade() {
                 h.render();
-            }
-        });
-        let weak = Rc::downgrade(&me);
-        refresh.connect_clicked(move |_| {
-            if let Some(h) = weak.upgrade() {
-                h.load();
             }
         });
         me
@@ -108,8 +105,21 @@ impl History {
                 }
                 h.loaded.set(true);
                 h.render();
+                let cb = h.on_load.borrow().clone();
+                if let Some(cb) = cb {
+                    cb();
+                }
             },
         );
+    }
+
+    /// How many past sessions there are (once read).
+    pub fn count(&self) -> usize {
+        self.items.borrow().len()
+    }
+
+    pub fn connect_loaded(&self, f: impl Fn() + 'static) {
+        *self.on_load.borrow_mut() = Some(Rc::new(f));
     }
 
     /// Show one agent's sessions (`None` for all).
@@ -215,10 +225,13 @@ impl History {
             outer.add_css_class("open");
         }
         let line = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        line.append(&nyx_ui::widgets::tag(&(self.name)(&p.harness), ""));
+        let mark = super::page::logo(&p.harness, 22);
+        mark.set_tooltip_text(Some(&(self.name)(&p.harness)));
+        line.append(&mark);
         let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
         text.set_hexpand(true);
         let title = gtk::Label::new(Some(if p.title.is_empty() { "Untitled" } else { &p.title }));
+        title.add_css_class("history-name");
         title.set_xalign(0.0);
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         let mut sub = vec![nyx_core::paths::pretty(std::path::Path::new(&p.cwd))];
@@ -239,7 +252,7 @@ impl History {
             line.append(&nyx_ui::widgets::tag("in Agents", ""));
         }
         let t = gtk::Label::new(Some(time));
-        t.add_css_class("session-meta");
+        t.add_css_class("session-time");
         line.append(&t);
         let head = gtk::Button::new();
         head.add_css_class("flat");
@@ -274,10 +287,10 @@ impl History {
         let (harness, id) = (p.harness.clone(), p.id.clone());
         if let Some(mid) = p.managed.clone().filter(|_| p.active) {
             let show = self.show_id.clone();
-            buttons.append(&action("Open", true, move || show(&mid)));
+            buttons.append(&action("go-next-symbolic", "Open", true, move || show(&mid)));
         } else if p.resumable && !p.active {
             let (h, i, show, toast) = (harness.clone(), id.clone(), self.show.clone(), self.toast.clone());
-            buttons.append(&action("Resume here", true, move || {
+            buttons.append(&action("view-refresh-symbolic", "Resume here", true, move || {
                 let (h, i, show, toast) = (h.clone(), i.clone(), show.clone(), toast.clone());
                 daemon::request(
                     move |c| c.call::<Session>(Call::ResumePast { harness: h, id: i }),
@@ -291,21 +304,21 @@ impl History {
         {
             let (h, i, toast) = (harness.clone(), id.clone(), self.toast.clone());
             let title = p.title.clone();
-            buttons.append(&action("Peek", false, move || peek(&h, &i, &title, toast.clone())));
+            buttons.append(&action("view-reveal-symbolic", "Peek", false, move || peek(&h, &i, &title, toast.clone())));
         }
         if p.resumable && !p.active {
             let (h, i, toast) = (harness.clone(), id.clone(), self.toast.clone());
-            buttons.append(&action("In a terminal", false, move || in_terminal(&h, &i, toast.clone())));
+            buttons.append(&action("utilities-terminal-symbolic", "In a terminal", false, move || in_terminal(&h, &i, toast.clone())));
         }
         if std::path::Path::new(&p.cwd).is_dir() {
             let cwd = p.cwd.clone();
-            buttons.append(&action("Folder", false, move || {
+            buttons.append(&action("folder-symbolic", "Folder", false, move || {
                 let _ = std::process::Command::new("xdg-open").arg(&cwd).spawn();
             }));
         }
         {
             let (i, toast) = (id.clone(), self.toast.clone());
-            buttons.append(&action("Copy ID", false, move || {
+            buttons.append(&action("edit-copy-symbolic", "Copy ID", false, move || {
                 if let Some(d) = gdk::Display::default() {
                     d.clipboard().set_text(&i);
                     toast("Copied");
@@ -331,6 +344,9 @@ impl History {
                     },
                 );
             });
+            trash.remove_css_class("destructive-action");
+            trash.add_css_class("flat");
+            trash.add_css_class("trash-button");
             buttons.append(&trash);
         }
         b.append(&buttons);
@@ -338,8 +354,8 @@ impl History {
     }
 }
 
-fn action(label: &str, primary: bool, run: impl Fn() + 'static) -> gtk::Button {
-    let b = gtk::Button::with_label(label);
+fn action(icon: &str, label: &str, primary: bool, run: impl Fn() + 'static) -> gtk::Button {
+    let (b, _) = super::page::icon_label_button(icon, label);
     if primary {
         b.add_css_class("suggested-action");
     }

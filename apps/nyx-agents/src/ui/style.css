@@ -1,12 +1,115 @@
-/* Nyx Agents on top of the shared 2.0 base. Colours come from theme tokens. */
+/* Nyx Agents on top of the shared 2.0 base. Colours come from theme tokens.
+ * The look follows nyx-design/mockups/agents. */
 
-.agents-window .session-bar {
-  min-height: 44px;
-  padding: 0 8px 0 6px;
+/* ---------- Agents' marks: a letter on each agent's colour ---------- */
+
+.agents-window .agent-logo {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 10px;
+  border-radius: 6px;
+  background: @theme_accent;
 }
 
-.agents-window .session-bar .session-meta {
-  color: @theme_dim_text;
+.agents-window .agent-logo.large {
+  font-size: 12px;
+  border-radius: 7px;
+}
+
+.agents-window .agent-logo.logo-claude { background: #d97757; }
+.agents-window .agent-logo.logo-codex { background: #10a37f; }
+.agents-window .agent-logo.logo-antigravity { background: #4285f4; }
+.agents-window .agent-logo.logo-muse { background: #8b6cf0; }
+.agents-window .agent-logo.logo-grok { background: #3b3d48; }
+.agents-window .agent-logo.logo-cursor { background: #2b2d37; }
+.agents-window .agent-logo.logo-omp { background: #e0a030; }
+.agents-window .agent-logo.logo-crush { background: #e8508b; }
+.agents-window .agent-logo.logo-opencode { background: #2f6fde; }
+.agents-window .agent-logo.logo-hermes { background: #c9a227; }
+.agents-window .agent-logo.logo-shell { background: @theme_text_tertiary; }
+
+/* ---------- Header ---------- */
+
+window.agents-window menubutton.new-button > button {
+  min-height: 28px;
+  padding: 0 10px 0 8px;
+  border-radius: 7px;
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+  font-weight: 500;
+}
+
+window.agents-window menubutton.new-button > button:checked {
+  background: @nav_active;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.35);
+}
+
+.agents-window .new-key {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+  margin-left: 2px;
+}
+
+/* ---------- Sidebar ---------- */
+
+.agents-window .settings-navigation:not(.compact) {
+  min-width: 236px;
+}
+
+.agents-window .agents-group {
+  margin: 16px 10px 4px;
+  font-size: 0.846em;
+  font-weight: 600;
+  color: @theme_text_tertiary;
+}
+
+.agents-window .agents-group.first { margin-top: 4px; }
+
+.agents-window .settings-navigation button.nav-item.session-row {
+  padding: 7px 10px;
+  min-height: 0;
+}
+
+.agents-window .settings-navigation button.nav-item.active {
+  box-shadow: none;
+}
+
+.agents-window .session-row .session-sub {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.agents-window .session-time {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+  font-feature-settings: "tnum";
+}
+
+.agents-window .mark-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+}
+
+.agents-window .mark-dot.working { background: @theme_accent; }
+.agents-window .mark-dot.ring { box-shadow: inset 0 0 0 1.5px @theme_dim_text; }
+
+.agents-window .nav-icon.blocked { color: @theme_warning; }
+.agents-window .nav-icon.working { color: @theme_accent; }
+.agents-window .nav-icon.done { color: @theme_success; }
+.agents-window .nav-icon.failed { color: @theme_danger; }
+
+.agents-window .sidebar-sep {
+  margin: 10px 6px;
+  background: @hairline;
+}
+
+/* ---------- Session bar ---------- */
+
+.agents-window .session-bar {
+  min-height: 46px;
+  padding: 0 10px 0 6px;
+  border-bottom: 1px solid @sheet_line;
 }
 
 window.agents-window button.flat.session-title {
@@ -16,177 +119,337 @@ window.agents-window button.flat.session-title {
   min-height: 0;
 }
 
-.agents-window .stop-button {
-  color: @theme_danger;
+.agents-window .session-title .title-pencil {
+  opacity: 0;
+  color: @theme_text_tertiary;
+  -gtk-icon-size: 13px;
 }
 
-.agents-window .status-pill {
-  border-radius: 999px;
-  padding: 1px 9px;
-  font-size: 0.85em;
-  font-weight: 600;
-  background: @lift;
+.agents-window .session-title:hover .title-pencil { opacity: 1; }
+
+.agents-window .session-meta {
   color: @theme_dim_text;
 }
 
-.agents-window .status-pill.working { background: alpha(@theme_accent, 0.18); color: @theme_accent; }
-.agents-window .status-pill.blocked { background: alpha(@theme_warning, 0.22); color: @theme_warning; }
-.agents-window .status-pill.done { background: alpha(@theme_success, 0.18); color: @theme_success; }
-.agents-window .status-pill.failed { background: alpha(@theme_danger, 0.18); color: @theme_danger; }
+.agents-window .session-meta .meta-icon {
+  color: @theme_text_tertiary;
+  -gtk-icon-size: 13px;
+}
+
+.agents-window .session-meta .meta-sep { color: @theme_text_tertiary; }
+.agents-window .session-meta .meta-msg { color: @theme_text; }
+
+.agents-window .status-pill {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.923em;
+  font-weight: 600;
+  background: @field;
+  color: @theme_dim_text;
+}
+
+.agents-window .status-pill .pill-dot {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.agents-window .status-pill:not(.working):not(.blocked) .pill-dot { min-width: 0; margin-right: -6px; }
+
+.agents-window .status-pill.working { background: alpha(@theme_accent, 0.16); color: @theme_accent; }
+.agents-window .status-pill.working .pill-dot { background: @theme_accent; }
+.agents-window .status-pill.blocked { background: alpha(@theme_warning, 0.18); color: @theme_warning; }
+.agents-window .status-pill.blocked .pill-dot { background: @theme_warning; }
+.agents-window .status-pill.done { background: alpha(@theme_success, 0.16); color: @theme_success; }
+.agents-window .status-pill.failed { background: alpha(@theme_danger, 0.16); color: @theme_danger; }
+
+.agents-window button.icon-label {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-weight: 500;
+}
+
+.agents-window button.icon-label image { -gtk-icon-size: 14px; }
+
+.agents-window button.icon-label:not(.suggested-action):not(.flat) {
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+}
+
+.agents-window button.stop-button { color: @theme_danger; }
+.agents-window button.stop-button image { -gtk-icon-size: 12px; }
+
+/* ---------- Panes ---------- */
+
+.agents-window .history-view { opacity: 0.62; }
 
 .agents-window .ended-banner {
   margin: 10px 12px 6px;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 14px;
   border-radius: 11px;
-  background: @lift;
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px @hairline;
 }
 
-.agents-window .ended-banner > image { color: @theme_dim_text; }
+.agents-window .ended-banner > image { color: @theme_dim_text; -gtk-icon-size: 18px; }
 .agents-window .ended-banner.done > image { color: @theme_success; }
-.agents-window .ended-banner.failed { background: alpha(@theme_danger, 0.10); }
+.agents-window .ended-banner.failed {
+  background: alpha(@theme_danger, 0.09);
+  box-shadow: inset 0 0 0 1px alpha(@theme_danger, 0.25);
+}
 .agents-window .ended-banner.failed > image { color: @theme_danger; }
+.agents-window .ended-banner .session-meta { font-size: 0.923em; }
 .agents-window .ended-title { font-weight: 600; }
+
+.agents-window .pane-head {
+  min-height: 32px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid @sheet_line;
+  font-size: 0.923em;
+  color: @theme_dim_text;
+}
+
+.agents-window .pane-head .pane-title { color: @theme_text; font-weight: 500; }
 
 .agents-window .find-bar {
   padding: 4px 8px;
 }
 
-/* Sidebar rows: the state, the title, and the agent and what it's doing below. */
-.agents-window .settings-navigation button.nav-item.session-row {
-  padding: 6px 10px;
-  min-height: 0;
-}
+/* ---------- The agent's desktop beside its terminal ---------- */
 
-.agents-window .session-row .session-sub {
-  color: @theme_text_tertiary;
-  font-size: 0.85em;
-}
-
-.agents-window .nav-icon.blocked { color: @theme_warning; }
-.agents-window .nav-icon.working { color: @theme_accent; }
-.agents-window .nav-icon.done { color: @theme_success; }
-.agents-window .nav-icon.failed { color: @theme_danger; }
-
-.agents-window .sidebar-sep {
-  margin: 10px 6px;
-}
-
-/* New session */
-.agents-window .new-session-menu {
-  min-width: 360px;
-  padding: 6px;
-}
-
-.agents-window .new-session-folder {
-  padding: 6px 10px;
-  border-radius: 7px;
-  background: @field;
-}
-
-.agents-window .new-agent {
-  padding: 8px 10px;
-  border-radius: 7px;
-  background: @field;
-}
-
-.agents-window .new-agent.selected {
-  background: @nav_active;
-  box-shadow: inset 0 0 0 1.5px @theme_accent;
-}
-
-.agents-window .new-option {
-  padding: 6px 2px;
-}
-
-.agents-window .harness-version {
-  color: @theme_dim_text;
-  font-size: 0.85em;
-}
-
-/* Nothing open */
-.agents-window .start-page {
-  padding: 24px;
-}
-
-.agents-window .start-page .empty-title {
-  font-size: 1.3em;
-  font-weight: 600;
-}
-
-.agents-window .start-tile {
-  min-width: 150px;
-  min-height: 64px;
-  padding: 12px;
-  border-radius: 11px;
-  background: @theme_card;
-}
-
-.agents-window .start-tile-name { font-weight: 600; }
-
-/* The agent's desktop beside its terminal */
 .agents-window .desktop-pane {
   border-left: 1px solid @sheet_line;
 }
 
 .agents-window .desktop-head {
   min-height: 36px;
-  padding: 0 6px 0 12px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid @sheet_line;
 }
 
-.agents-window .desktop-title { font-weight: 600; }
+.agents-window .desktop-head > image { color: @theme_dim_text; }
+.agents-window .desktop-title { font-weight: 500; }
 
-/* History */
-.agents-window .history-title {
+.agents-window togglebutton.take-over {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+  font-size: 0.923em;
+  font-weight: 500;
+}
+
+.agents-window togglebutton.take-over:checked {
+  background: @theme_accent;
+  color: @theme_on_accent;
+}
+
+.agents-window .desktop-screen {
+  margin: 12px;
+  border-radius: 8px;
+  background: #1b1d27;
+  box-shadow: 0 0 0 1px @hairline;
+}
+
+.agents-window .desktop-note {
+  padding: 0 14px 12px;
+  color: @theme_text_tertiary;
+  font-size: 0.923em;
+}
+
+/* ---------- Subagents, under the terminal ---------- */
+
+.agents-window .inspector {
+  border-top: 1px solid @sheet_line;
+}
+
+.agents-window .subagent-row {
+  min-height: 34px;
+  padding: 0 12px 0 14px;
+}
+
+.agents-window .inspector-icon { color: @theme_dim_text; }
+.agents-window .inspector-count { font-weight: 500; }
+
+.agents-window .inspector-label {
+  color: @theme_dim_text;
+}
+
+.agents-window .subagent-tab {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: @field;
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.agents-window .subagent-tab:checked {
+  background: @nav_active;
+  color: @theme_text;
+}
+
+.agents-window .sub-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 999px;
+  background: @theme_accent;
+}
+
+.agents-window .sub-dot.waiting { background: @theme_warning; }
+.agents-window .sub-dot.completed { background: @theme_success; }
+.agents-window .sub-dot.failed { background: @theme_danger; }
+
+.agents-window .viewer-head {
+  padding: 4px 8px;
+}
+
+/* ---------- New session ---------- */
+
+.agents-window .new-session-menu {
+  min-width: 360px;
+  padding: 6px;
+}
+
+.agents-window .menu-heading {
+  font-size: 0.846em;
   font-weight: 600;
-  margin: 0 4px 0 8px;
+  color: @theme_text_tertiary;
+  margin: 8px 2px 2px;
+}
+
+.agents-window button.new-session-folder {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+}
+
+.agents-window button.new-agent {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+  font-weight: 500;
+}
+
+.agents-window button.new-agent.selected {
+  background: @nav_active;
+  box-shadow: inset 0 0 0 1.5px @theme_accent;
+}
+
+.agents-window .new-option {
+  padding: 8px 2px;
+}
+
+.agents-window .option-line { background: @hairline; }
+
+.agents-window .harness-version {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+/* ---------- Nothing open ---------- */
+
+.agents-window .start-page {
+  padding: 24px;
+}
+
+.agents-window .start-title {
+  font-size: 1.308em;
+  font-weight: 600;
+}
+
+.agents-window button.folder-pick {
+  min-height: 28px;
+  padding: 0 8px 0 11px;
+  border-radius: 7px;
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+}
+
+.agents-window button.start-tile {
+  min-width: 150px;
+  min-height: 86px;
+  padding: 12px;
+  border-radius: 11px;
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px @hairline;
+}
+
+.agents-window button.start-tile:hover {
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.45), 0 0 0 3px alpha(@theme_accent, 0.35);
+}
+
+.agents-window .start-tile-name { font-weight: 600; }
+
+.agents-window .start-keys {
+  color: @theme_text_tertiary;
+  font-size: 0.923em;
+}
+
+/* ---------- Discard ---------- */
+
+.agents-window checkbutton.discard-check {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: @field;
+  box-shadow: inset 0 0 0 1px @hairline;
+}
+
+/* ---------- History ---------- */
+
+.agents-window .history-title {
+  font-size: 1.154em;
+  font-weight: 600;
+  margin: 0 8px 0 8px;
+}
+
+window.agents-window .history-page .session-bar button.chip {
+  min-height: 26px;
+  padding: 0 11px;
+  font-size: 0.923em;
+}
+
+window.agents-window .history-page .session-bar entry {
+  min-height: 28px;
 }
 
 .agents-window .history-list {
-  padding: 4px 12px 16px;
+  padding: 6px 12px 12px;
 }
 
 .agents-window .history-day {
   color: @theme_text_tertiary;
-  font-size: 0.85em;
+  font-size: 0.846em;
   font-weight: 600;
-  margin: 14px 8px 4px;
+  margin: 14px 8px 6px;
 }
 
 window.agents-window button.flat.history-row {
-  padding: 6px 10px;
+  padding: 8px 10px;
   border-radius: 7px;
   color: @theme_text;
   font-weight: 400;
 }
 
+.agents-window .history-name { font-weight: 500; }
+
 .agents-window .history-item.open {
   background: @theme_card;
   border-radius: 11px;
+  box-shadow: inset 0 0 0 1px @hairline;
+  margin-bottom: 4px;
 }
 
 .agents-window .history-details {
-  padding: 2px 12px 12px 12px;
+  padding: 4px 12px 12px 44px;
 }
 
-/* Subagents */
-.agents-window .subagent-row {
-  padding: 4px 8px;
-}
-
-.agents-window .inspector-label {
-  color: @theme_dim_text;
-  font-size: 0.85em;
-}
-
-.agents-window .subagent-tab {
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-
-.agents-window .subagent-tab:checked {
-  background: @lift_active;
-}
-
-.agents-window .viewer-head {
-  padding: 4px 8px;
-}
+.agents-window button.trash-button { color: @theme_dim_text; }

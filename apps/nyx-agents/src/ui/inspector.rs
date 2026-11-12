@@ -25,6 +25,9 @@ struct Viewer {
 pub struct Inspector {
     /// The panel under the terminal (tabs, then the viewer).
     pub root: gtk::Box,
+    count: gtk::Label,
+    state: gtk::Label,
+    chevron: gtk::Image,
     tabs: gtk::Box,
     buttons: RefCell<HashMap<String, gtk::ToggleButton>>,
     viewer_box: gtk::Box,
@@ -38,12 +41,13 @@ pub struct Inspector {
     hidden: std::cell::Cell<bool>,
 }
 
-fn state_icon(s: SubagentState) -> &'static str {
+/// The colour of a subagent's dot.
+fn state_class(s: SubagentState) -> &'static str {
     match s {
-        SubagentState::Running => "emblem-synchronizing-symbolic",
-        SubagentState::Waiting => "media-playback-pause-symbolic",
-        SubagentState::Completed => "object-select-symbolic",
-        SubagentState::Failed => "dialog-error-symbolic",
+        SubagentState::Running => "running",
+        SubagentState::Waiting => "waiting",
+        SubagentState::Completed => "completed",
+        SubagentState::Failed => "failed",
     }
 }
 
@@ -69,13 +73,23 @@ impl Inspector {
             .vscrollbar_policy(gtk::PolicyType::Never)
             .child(&tabs)
             .build();
-        let label = gtk::Label::new(Some("Subagents"));
-        label.add_css_class("inspector-label");
+        let icon = gtk::Image::from_icon_name("view-list-bullet-symbolic");
+        icon.add_css_class("inspector-icon");
+        let count = gtk::Label::new(Some("Subagents"));
+        count.add_css_class("inspector-count");
+        let state = gtk::Label::new(None);
+        state.add_css_class("inspector-label");
+        let chevron = gtk::Image::from_icon_name("pan-up-symbolic");
+        chevron.add_css_class("inspector-icon");
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.add_css_class("subagent-row");
-        row.append(&label);
+        row.append(&icon);
+        row.append(&count);
+        row.append(&state);
         scroller.set_hexpand(true);
+        scroller.set_margin_start(6);
         row.append(&scroller);
+        row.append(&chevron);
         root.append(&row);
 
         let viewer_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -100,6 +114,9 @@ impl Inspector {
 
         let me = Rc::new(Inspector {
             root,
+            count,
+            state,
+            chevron,
             tabs,
             buttons: RefCell::new(HashMap::new()),
             viewer_box,
@@ -129,6 +146,10 @@ impl Inspector {
         *self.session.borrow_mut() = Some((s.harness.clone(), s.cwd.clone(), hs, s.created));
         *self.subs.borrow_mut() = s.subagents.clone();
         self.root.set_visible(!s.subagents.is_empty() && !self.hidden.get());
+        let n = s.subagents.len();
+        self.count.set_text(&format!("{n} subagent{}", if n == 1 { "" } else { "s" }));
+        let running = s.subagents.iter().filter(|a| matches!(a.state, SubagentState::Running | SubagentState::Waiting)).count();
+        self.state.set_text(if running > 0 { "running" } else { "done" });
         let mut buttons = self.buttons.borrow_mut();
         for sub in &s.subagents {
             let b = buttons.entry(sub.id.clone()).or_insert_with(|| {
@@ -144,7 +165,11 @@ impl Inspector {
                 b
             });
             let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-            content.append(&gtk::Image::from_icon_name(state_icon(sub.state)));
+            let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            dot.add_css_class("sub-dot");
+            dot.add_css_class(state_class(sub.state));
+            dot.set_valign(gtk::Align::Center);
+            content.append(&dot);
             let name = sub.description.clone().unwrap_or_else(|| sub.name.clone());
             let label = gtk::Label::new(Some(&name));
             label.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -234,6 +259,7 @@ impl Inspector {
         self.viewer_title.set_text(&self.title_for(&sub));
         self.viewer_box.append(&view);
         self.viewer_box.set_visible(true);
+        self.chevron.set_icon_name(Some("pan-down-symbolic"));
         *self.viewer.borrow_mut() = Some(Viewer { id: id.to_string(), view, _monitor: monitor });
         // The agent's terminal keeps most of the room.
         let paned = self.paned.clone();
@@ -254,6 +280,7 @@ impl Inspector {
     pub fn close_viewer(&self) {
         self.close_viewer_widget();
         self.viewer_box.set_visible(false);
+        self.chevron.set_icon_name(Some("pan-up-symbolic"));
         for b in self.buttons.borrow().values() {
             b.set_active(false);
         }
