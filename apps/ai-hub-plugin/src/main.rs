@@ -295,7 +295,8 @@ fn action(st: &mut State, a: &str, send: &(impl Fn(Data) + Send + Clone + 'stati
         }
         "load" => sources::model(true, rest.into(), send.clone()),
         "unload" => sources::model(false, rest.into(), send.clone()),
-        "copy-endpoint" => spawn(&["wl-copy", "http://127.0.0.1:8080/v1"]),
+        "copy-endpoint" => spawn(&["wl-copy", &format!("http://{rest}/v1")]),
+        "ai-settings" => spawn(&["nyx-settings", "--section", "local-ai"]),
         _ => {}
     }
 }

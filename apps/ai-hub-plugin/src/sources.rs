@@ -107,6 +107,8 @@ pub struct Local {
     pub ram_total: u64,
     pub ram_available: u64,
     pub models: Vec<Model>,
+    /// The OpenAI-compatible endpoint's address, when it's turned on.
+    pub endpoint: Option<String>,
 }
 
 fn ai_socket() -> PathBuf {
@@ -161,7 +163,7 @@ fn friendly(id: &str) -> String {
 
 pub fn local(send: impl Fn(Data) + Send + 'static) {
     std::thread::spawn(move || {
-        let r = ai(&[json!({ "type": "resource_status" }), json!({ "type": "worker_status" }), json!({ "type": "list_models" })]);
+        let r = ai(&[json!({ "type": "resource_status" }), json!({ "type": "worker_status" }), json!({ "type": "list_models" }), json!({ "type": "service_settings" })]);
         let l = r.ok().map(|v| {
             let (res, worker, models) = (&v[0], &v[1], &v[2]["models"]);
             let mut models: Vec<Model> = models
@@ -194,6 +196,7 @@ pub fn local(send: impl Fn(Data) + Send + 'static) {
                 ram_total: res["ram_total"].as_u64().unwrap_or(0),
                 ram_available: res["ram_available"].as_u64().unwrap_or(0),
                 models,
+                endpoint: v[3]["openai_endpoint"].as_str().map(String::from),
             }
         });
         send(Data::Local(l));

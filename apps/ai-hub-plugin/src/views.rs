@@ -834,7 +834,10 @@ fn local_tab(st: &State) -> Node {
     }
     out.push(card(models));
     out.push(section("CODING TOOLS"));
-    out.push(card([row(Some("network-server-symbolic"), "OpenAI-compatible API", Some("127.0.0.1:8080/v1 · loopback only · click to copy".into()), Some("copy-endpoint"))]));
+    out.push(card([match &l.endpoint {
+        Some(addr) => row(Some("network-server-symbolic"), "OpenAI-compatible API", Some(format!("{addr}/v1 · needs the API key from Settings › AI · click to copy")), Some(&format!("copy-endpoint:{addr}"))),
+        None => row(Some("network-server-symbolic"), "OpenAI-compatible API", Some("Off · turn it on in Settings › AI".into()), Some("ai-settings")),
+    }]));
     fill(vbox(out))
 }
 
