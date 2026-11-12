@@ -10,10 +10,10 @@ repository.workspace = true
 [dependencies]
 nyx-agents-proto = { path = "../../crates/nyx-agents-proto" }
 nyx-agents-client = { path = "../../crates/nyx-agents-client" }
-nyx-plugin-sdk = { git = "https://github.com/design-nexus/nyx-core.git", rev = "918729504918ec344b3a853a5ce0ea2c9dbb7b5f" }
+nyx-plugin-sdk = { git = "https://github.com/design-nexus/nyx-core.git", rev = "32f0c5e154fc44c763b8ecd80d35a3b298723afa" }
 serde.workspace = true
 serde_json.workspace = true
 libc.workspace = true
 
 [dev-dependencies]
-nyx-plugin = { git = "https://github.com/design-nexus/nyx-core.git", rev = "918729504918ec344b3a853a5ce0ea2c9dbb7b5f" }
+nyx-plugin = { git = "https://github.com/design-nexus/nyx-core.git", rev = "32f0c5e154fc44c763b8ecd80d35a3b298723afa" }
