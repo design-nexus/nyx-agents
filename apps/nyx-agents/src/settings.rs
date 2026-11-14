@@ -3,7 +3,7 @@
 //! `~/.config/nyx-agents/config.toml`, shared with the manager.
 
 use nyx_agents_client::Client;
-use nyx_agents_proto::Harness;
+use nyx_agents_proto::{Activity, Harness, Lifecycle, Session};
 use serde_json::{Value, json};
 
 fn config_path() -> std::path::PathBuf {
@@ -63,13 +63,13 @@ pub fn set_notifications(on: bool) -> std::io::Result<()> {
     set("notifications", "enabled", toml::Value::Boolean(on))
 }
 
-/// Agents whose provider reports a quota, and how it is asked.
-const QUOTAS: &[(&str, &str, &str)] = &[
-    ("claude", "Claude Code", "Asks Anthropic with Claude Code's own sign-in."),
-    ("codex", "Codex", "Asks OpenAI through codex app-server, with no model calls."),
-    ("grok", "Grok Build", "Asks xAI with Grok's sign-in, read only: it is never renewed or rewritten here."),
-    ("cursor", "Cursor", "Asks Cursor with its own sign-in."),
-    ("antigravity", "Antigravity", "Runs agy -p /usage."),
+/// Agents whose provider reports a quota, how it is asked, and that in one short line.
+const QUOTAS: &[(&str, &str, &str, &str)] = &[
+    ("claude", "Claude Code", "Asks Anthropic with Claude Code's own sign-in.", "Asks Anthropic with Claude Code's own sign-in"),
+    ("codex", "Codex", "Asks OpenAI through codex app-server, with no model calls.", "Asks OpenAI through codex app-server, with no model calls"),
+    ("grok", "Grok Build", "Asks xAI with Grok's sign-in, read only: it is never renewed or rewritten here.", "Read only: its sign-in is never renewed here"),
+    ("cursor", "Cursor", "Asks Cursor with its own sign-in.", "Asks Cursor with its own sign-in"),
+    ("antigravity", "Antigravity", "Runs agy -p /usage.", "Runs agy -p /usage"),
 ];
 
 /// The agents listed in `[usage] quotas`.
@@ -93,9 +93,46 @@ fn harnesses() -> (Vec<Harness>, bool) {
     }
 }
 
+/// The sessions the manager holds, when it answers.
+fn sessions() -> Option<Vec<Session>> {
+    Client::connect("nyx-agents-settings").and_then(|mut c| c.sessions()).ok()
+}
+
+/// Whether this Settings draws a preview pane beside the groups.
+fn preview_supported() -> bool {
+    std::env::var("SETTINGS_KINDS").is_ok_and(|k| k.split(' ').any(|x| x == "preview"))
+}
+
+/// The version number out of a `--version` line ("grok 1.0.77 (50ca…) [stable]" is "1.0.77").
+fn short_version(v: &str) -> &str {
+    v.split_whitespace()
+        .map(|t| t.rsplit('/').next().unwrap_or(t).trim_start_matches('v'))
+        .find(|t| t.starts_with(|c: char| c.is_ascii_digit()) && t.contains('.'))
+        .unwrap_or(v)
+}
+
+/// What the harness can do beyond running in a terminal.
+fn abilities(h: &Harness) -> Vec<&'static str> {
+    let c = &h.capabilities;
+    let mut can = Vec::new();
+    if c.program_status {
+        can.push("status");
+    }
+    if c.resume {
+        can.push("resume");
+    }
+    if c.subagents.is_some() {
+        can.push("subagents");
+    }
+    can
+}
+
 fn page() -> Value {
     let cfg = config();
     let (list, running) = harnesses();
+    if preview_supported() {
+        return page_with_preview(&cfg, &list, running, if running { sessions() } else { None });
+    }
     let installed: Vec<&Harness> = list.iter().filter(|h| h.path.is_some() && h.id != "shell").collect();
     let mut options: Vec<Value> = vec![json!(["", "The last one used"])];
     options.extend(installed.iter().map(|h| json!([h.id, h.name])));
@@ -103,17 +140,7 @@ fn page() -> Value {
         .iter()
         .filter(|h| h.id != "shell")
         .map(|h| {
-            let c = &h.capabilities;
-            let mut can = Vec::new();
-            if c.program_status {
-                can.push("status");
-            }
-            if c.resume {
-                can.push("resume");
-            }
-            if c.subagents.is_some() {
-                can.push("subagents");
-            }
+            let can = abilities(h);
             let value = match (&h.path, &h.version) {
                 (None, _) => "Not installed".to_string(),
                 (Some(_), Some(v)) => v.clone(),
@@ -128,7 +155,7 @@ fn page() -> Value {
     let on = quotas(&cfg);
     let quota_rows: Vec<Value> = QUOTAS
         .iter()
-        .map(|(id, name, how)| {
+        .map(|(id, name, how, _)| {
             json!({ "kind": "switch", "key": format!("quota-{id}"), "title": format!("Check {name}'s quota"), "desc": how, "value": on.iter().any(|a| a == id) })
         })
         .collect();
@@ -155,6 +182,90 @@ fn page() -> Value {
     })
 }
 
+/// The page as controls on the left and the agents on this computer on the right.
+fn page_with_preview(cfg: &toml::Table, list: &[Harness], running: bool, sessions: Option<Vec<Session>>) -> Value {
+    let agents: Vec<&Harness> = list.iter().filter(|h| h.id != "shell").collect();
+    let installed: Vec<&Harness> = agents.iter().copied().filter(|h| h.path.is_some()).collect();
+    let mut options: Vec<Value> = vec![json!(["", "The last one used"])];
+    options.extend(installed.iter().map(|h| json!([h.id, h.name])));
+    let on = quotas(cfg);
+    let quota_rows: Vec<Value> = QUOTAS
+        .iter()
+        .map(|(id, name, _, short)| {
+            json!({ "kind": "switch", "key": format!("quota-{id}"), "title": name, "desc": short,
+                    "icon": "power-profile-performance-symbolic", "value": on.iter().any(|a| a == id) })
+        })
+        .collect();
+
+    let mut stats = vec![if running {
+        json!({ "label": "Session manager", "value": "Running", "sub": "Starts when Agents opens", "tone": "good" })
+    } else {
+        json!({ "label": "Session manager", "value": "Not running", "sub": "Starts when Agents opens" })
+    }];
+    if let Some(s) = sessions {
+        let live = s.iter().filter(|s| matches!(s.lifecycle, Lifecycle::Running | Lifecycle::Starting)).count();
+        let waiting =
+            s.iter().filter(|s| s.lifecycle == Lifecycle::Running && s.status.activity == Activity::Blocked).count();
+        let sub = match waiting {
+            0 => "None waiting".to_string(),
+            1 => "1 needs you".to_string(),
+            n => format!("{n} need you"),
+        };
+        let mut item = json!({ "label": "Sessions", "value": format!("{live} open"), "sub": sub });
+        if waiting > 0 {
+            item["tone"] = json!("warn");
+        }
+        stats.push(item);
+    }
+    stats.push(json!({ "label": "Installed", "value": format!("{} of {}", installed.len(), agents.len()), "sub": "Agents to pick from" }));
+
+    let found: Vec<Value> = agents
+        .iter()
+        .map(|h| {
+            let can = abilities(h).join(" · ");
+            let sub = match (&h.path, &h.version) {
+                (Some(_), Some(v)) if can.is_empty() => short_version(v).to_string(),
+                (Some(_), Some(v)) => format!("{} · {can}", short_version(v)),
+                _ if can.is_empty() => "Runs in a terminal".to_string(),
+                _ => can,
+            };
+            json!({ "icon": "utilities-terminal-symbolic", "label": h.name, "sub": sub,
+                    "value": if h.path.is_some() { "Installed" } else { "Not installed" } })
+        })
+        .collect();
+
+    json!({
+        "poll": 5,
+        "groups": [
+            { "title": "Notifications", "note": "Agents that end unexpectedly are included; the session on screen is not notified about.", "rows": [
+                { "kind": "switch", "key": "notifications", "title": "Notify when an agent needs you", "icon": "preferences-system-notifications-symbolic",
+                  "desc": "Approvals, finished turns and errors", "value": get_bool(cfg, "notifications", "enabled", true) }
+            ]},
+            { "title": "New sessions", "note": "Change the folder in Agents' settings (Ctrl+,).", "rows": [
+                { "kind": "choice", "key": "default_harness", "title": "Agent", "icon": "utilities-terminal-symbolic", "desc": "Listed first in New session",
+                  "value": get_str(cfg, "sessions", "default_harness").unwrap_or_default(), "options": options },
+                { "kind": "info", "key": "default_folder", "title": "Folder", "icon": "folder-symbolic", "value": default_folder(),
+                  "desc": "Where new sessions start" }
+            ]},
+            { "title": "Quotas in the AI Hub", "note": "Each is checked every few minutes while on. Sign-ins are read by the session manager only and sent only to their own provider.", "rows": quota_rows },
+            { "title": "Terminal", "rows": [
+                { "kind": "info", "key": "font", "title": "Font", "icon": "preferences-desktop-font-symbolic", "value": "System monospace",
+                  "desc": "Change it under Appearance; colours follow the theme" }
+            ]}
+        ],
+        "preview": {
+            "title": "Agents on this computer",
+            "line": "Found on your PATH and in mise's installs. Shims are never run.",
+            "blocks": [
+                { "kind": "stats", "items": stats },
+                { "kind": "list", "items": found }
+            ],
+            "foot": "Quotas turned on show in the AI Hub on the bar.",
+            "foot_icon": "dialog-information-symbolic"
+        }
+    })
+}
+
 pub fn run(args: &[String]) -> i32 {
     match args.first().map(String::as_str) {
         Some("pages") => {
@@ -162,7 +273,7 @@ pub fn run(args: &[String]) -> i32 {
                 "{}",
                 json!([{ "id": "agents", "title": "Agents", "icon": "utilities-terminal-symbolic",
                          "description": "Coding agents: notifications, the default agent, what is installed",
-                         "keywords": ["claude", "codex", "agents", "ai", "notifications", "quota", "usage"] }])
+                         "keywords": "claude codex agents ai notifications quota usage" }])
             );
             0
         }
@@ -197,5 +308,35 @@ pub fn run(args: &[String]) -> i32 {
             eprintln!("usage: nyx-agents settings pages|describe PAGE|set PAGE KEY VALUE");
             2
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_versions() {
+        assert_eq!(short_version("2.1.322 (Claude Code)"), "2.1.322");
+        assert_eq!(short_version("codex-cli 0.167.2"), "0.167.2");
+        assert_eq!(short_version("omp/18.6.1"), "18.6.1");
+        assert_eq!(short_version("grok 1.0.77 (50ca579fa996) [stable]"), "1.0.77");
+        assert_eq!(short_version("crush version v0.101.0"), "0.101.0");
+        assert_eq!(short_version("nightly"), "nightly");
+    }
+
+    #[test]
+    fn preview_page_has_icons_and_readings() {
+        let p = page_with_preview(&toml::Table::new(), &[], false, None);
+        for g in p["groups"].as_array().unwrap() {
+            for r in g["rows"].as_array().unwrap() {
+                assert!(r["icon"].is_string(), "{} has no icon", r["key"]);
+            }
+        }
+        let blocks = p["preview"]["blocks"].as_array().unwrap();
+        assert_eq!(blocks[0]["kind"], "stats");
+        let labels: Vec<&str> = blocks[0]["items"].as_array().unwrap().iter().filter_map(|i| i["label"].as_str()).collect();
+        assert_eq!(labels, ["Session manager", "Installed"], "no Sessions reading without the manager");
+        assert_eq!(blocks[1]["kind"], "list");
     }
 }
