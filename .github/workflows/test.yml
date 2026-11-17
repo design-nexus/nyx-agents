@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
-      - run: pacman -Syu --noconfirm --needed git rust zig gtk4 pango fontconfig curl
+      - run: pacman -Syu --noconfirm --needed git rust zig clang gtk4 pango fontconfig curl
       - uses: actions/checkout@v4
       - run: tools/fetch-libghostty-vt.sh
       - run: cargo test --workspace --locked
