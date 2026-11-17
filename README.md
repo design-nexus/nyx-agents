@@ -38,8 +38,10 @@ title or folder; Enter opens it), desktop notifications when an agent needs you 
 the manager, so the app can be closed), a Nyx Settings page, and sessions in
 their own git worktree (`--worktree`, or "In a new worktree" in New session).
 
-Install: `./install.sh agents` (builds, installs to `~/.local/bin`, and
-enables `nyx-agentd.socket`, which starts the manager on first use).
+Install: on NyxOS, from the Store or with `nyx install nyx-agents` (AI Lens comes with
+it). On Omarchy, `./install.sh agents` builds, installs to `~/.local/bin`, and enables
+`nyx-agentd.socket`, which starts the manager on first use; `./install-ai-lens.sh` adds
+AI Lens.
 
 ## Command line
 
