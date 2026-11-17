@@ -120,19 +120,47 @@ fn main() {
         }
         return;
     }
-    let data = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".local/share"));
-    if toggle_existing(&data) {
+    let dirs = data_dirs();
+    if toggle_existing(&dirs) {
         return;
     }
-    let status = std::process::Command::new("qs").args(["-p"]).arg(data.join("nyx-ai-lens/qml/Standalone.qml")).status();
+    let Some(standalone) = find(&dirs, "nyx-ai-lens/qml/Standalone.qml") else {
+        eprintln!("nyx-ai-lens: its QML (nyx-ai-lens/qml) isn't installed");
+        std::process::exit(1)
+    };
+    let status = std::process::Command::new("qs").args(["-p"]).arg(standalone).status();
     if !status.is_ok_and(|s| s.success()) {
         std::process::exit(1)
     }
 }
 
-fn toggle_existing(data: &std::path::Path) -> bool {
+/// Where its QML and Nyx Shell's can be: the user's data folder (install-ai-lens.sh),
+/// the package's own `share` beside this program (NyxOS), then the system's data folders.
+fn data_dirs() -> Vec<PathBuf> {
+    let mut dirs = vec![
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/share")),
+    ];
+    if let Some(share) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.canonicalize().ok())
+        .and_then(|exe| exe.parent().and_then(|bin| bin.parent()).map(|prefix| prefix.join("share")))
+    {
+        dirs.push(share);
+    }
+    let system = std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
+    dirs.extend(system.split(':').filter(|d| !d.is_empty()).map(PathBuf::from));
+    dirs
+}
+
+/// The first copy of `relative` in `dirs`, with symbolic links resolved (Quickshell names an
+/// instance by its configuration's real path).
+fn find(dirs: &[PathBuf], relative: &str) -> Option<PathBuf> {
+    dirs.iter().map(|d| d.join(relative)).find(|p| p.exists()).map(|p| p.canonicalize().unwrap_or(p))
+}
+
+fn toggle_existing(dirs: &[PathBuf]) -> bool {
     let quiet = |program: &str, args: Vec<String>| {
         std::process::Command::new(program)
             .args(args)
@@ -146,20 +174,18 @@ fn toggle_existing(data: &std::path::Path) -> bool {
     {
         return true;
     }
-    for qml in [data.join("nyx-shell/qml/shell.qml"), data.join("nyx-ai-lens/qml/Standalone.qml")] {
-        if qml.exists()
-            && quiet(
-                "qs",
-                vec![
-                    "-p".into(),
-                    qml.to_string_lossy().into_owned(),
-                    "ipc".into(),
-                    "call".into(),
-                    "nyx-ai-lens".into(),
-                    "toggle".into(),
-                ],
-            )
-        {
+    for qml in ["nyx-shell/qml/shell.qml", "nyx-ai-lens/qml/Standalone.qml"].into_iter().filter_map(|q| find(dirs, q)) {
+        if quiet(
+            "qs",
+            vec![
+                "-p".into(),
+                qml.to_string_lossy().into_owned(),
+                "ipc".into(),
+                "call".into(),
+                "nyx-ai-lens".into(),
+                "toggle".into(),
+            ],
+        ) {
             return true;
         }
     }
