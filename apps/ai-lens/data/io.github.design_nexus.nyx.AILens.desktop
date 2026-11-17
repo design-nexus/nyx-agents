@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=AI Lens
+Comment=Agent activity, subscription allowance and local inference
+Exec=nyx-ai-lens
+Icon=io.github.design_nexus.nyx.AILens
+Terminal=false
+Categories=Utility;Monitor;
+Keywords=AI;Agents;Quota;Sessions;

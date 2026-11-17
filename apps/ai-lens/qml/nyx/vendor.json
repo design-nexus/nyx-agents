@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/design-nexus/nyx-design",
+  "revision": "b87a5ece1b8873fcb1e4d58fc071f685b298b7d6",
+  "modules": [
+    "Nyx.Ui",
+    "Nyx.Theme"
+  ],
+  "adaptation": "Relative imports for Omarchy plugin engines; styles unchanged."
+}

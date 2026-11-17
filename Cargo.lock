@@ -1530,6 +1530,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyx-ai-lens"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "nyx-agents-proto",
+ "serde_json",
+]
+
+[[package]]
 name = "nyx-config"
 version = "0.1.0"
 source = "git+https://github.com/nyxos-project/nyx-system.git?rev=3f3c454cdf34cfce571a5ff3802a25817e9301f9#3f3c454cdf34cfce571a5ff3802a25817e9301f9"

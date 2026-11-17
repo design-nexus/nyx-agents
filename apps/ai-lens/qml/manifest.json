@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "design-nexus.ai-lens",
+  "name": "AI Lens",
+  "version": "1.0.0",
+  "author": "Design Nexus",
+  "license": "MIT",
+  "description": "AI Lens \u00b7 native Nyx quick panel",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "AI Lens",
+    "category": "AI",
+    "allowMultiple": false,
+    "defaultSection": "left",
+    "defaults": {},
+    "schema": []
+  }
+}

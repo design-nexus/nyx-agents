@@ -1,0 +1,3 @@
+module Nyx.Theme
+singleton NyxTheme 1.0 NyxTheme.qml
+ThemeTransition 1.0 ThemeTransition.qml
